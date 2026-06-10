@@ -4,7 +4,7 @@ import { FRAME1_COLORS, FRAME2_COLORS } from '../types';
 import { soundManager } from '../utils/SoundManager';
 
 
-const COLOR1_CLASS = 'bg-gradient-to-br from-slate-300 to-slate-400 shadow-[0_4px_10px_rgba(148,163,184,0.25)] border border-slate-400/20';
+const COLOR1_CLASS = 'bg-gradient-to-br from-[#d1d5db] to-[#9ca3af] shadow-[0_4px_8px_rgba(156,163,175,0.2),inset_0_2px_3px_rgba(255,255,255,0.4)] border border-slate-300/10';
 
 interface TwentyFieldProps {
   task: Task;
@@ -37,9 +37,14 @@ export const TwentyField: React.FC<TwentyFieldProps> = ({
     if (level === 1) return false;
     if (!isCellActive(index)) return false;
 
-    if (level === 2 && task.type === 'addition') {
-      // In Level 2 Addition, only cells starting from operand1 are interactive
-      return index >= task.operand1;
+    if (level === 2) {
+      if (task.type === 'addition') {
+        // In Level 2 Addition, only cells starting from operand1 are interactive
+        return index >= task.operand1;
+      } else {
+        // In Level 2 Subtraction, only cells representing the subtracted amount are interactive (from C to A-1)
+        return index >= task.result;
+      }
     }
 
     return true;
@@ -59,16 +64,16 @@ export const TwentyField: React.FC<TwentyFieldProps> = ({
     const state = cellStates[index];
 
     // Responsive outer grid cell container sizes
-    let containerClass = "w-11 h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 xl:w-16 xl:h-16 flex items-center justify-center rounded-xl md:rounded-2xl border transition-all duration-200 select-none";
+    let containerClass = "w-11 h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 xl:w-16 xl:h-16 flex items-center justify-center rounded-2xl border transition-all duration-200 select-none";
 
     if (active) {
       if (interactive) {
-        containerClass += " bg-white/75 border-white shadow-sm hover:bg-white/95 hover:scale-[1.04] hover:shadow-md cursor-pointer";
+        containerClass += " bg-[#ffffff] border-[#e0e7ff]/60 shadow-[0_4px_8px_rgba(148,163,184,0.08),inset_0_2px_4px_rgba(255,255,255,0.8)] hover:bg-[#fafbff] hover:scale-[1.05] hover:shadow-[0_6px_12px_rgba(148,163,184,0.12)] cursor-pointer";
       } else {
-        containerClass += " bg-white/40 border-white/40";
+        containerClass += " bg-[#ffffff]/50 border-white/40 shadow-[inset_0_2px_4px_rgba(148,163,184,0.03)]";
       }
     } else {
-      containerClass += " bg-slate-100/10 border-dashed border-slate-200/30 opacity-20";
+      containerClass += " bg-slate-200/10 border-dashed border-slate-300/20 opacity-25";
     }
 
     return (
@@ -98,10 +103,10 @@ export const TwentyField: React.FC<TwentyFieldProps> = ({
               <>
                 {task.type === 'subtraction' ? (
                   // Subtraction: Solid, decent gray circle for the minuend placeholders
-                  <div className="w-8 h-8 md:w-9 md:h-9 lg:w-11 lg:h-11 xl:w-12 xl:h-12 rounded-full border-2 border-solid border-slate-300 transition-all duration-200" />
+                  <div className="w-8 h-8 md:w-9 md:h-9 lg:w-11 lg:h-11 xl:w-12 xl:h-12 rounded-full border-2 border-solid border-slate-200 bg-[#f1f5f9]/60 shadow-[inset_0_2px_3px_rgba(148,163,184,0.08)]" />
                 ) : (
                   // Addition: Dashed outline for empty spaces
-                  <div className="w-8 h-8 md:w-9 md:h-9 lg:w-11 lg:h-11 xl:w-12 xl:h-12 rounded-full border-2 border-dashed border-slate-300/60 flex items-center justify-center transition-all duration-200 hover:border-slate-400/80" />
+                  <div className="w-8 h-8 md:w-9 md:h-9 lg:w-11 lg:h-11 xl:w-12 xl:h-12 rounded-full border-2 border-dashed border-slate-300/50 bg-slate-50/20 flex items-center justify-center transition-all duration-200 hover:border-slate-400/50" />
                 )}
               </>
             )}
@@ -112,7 +117,7 @@ export const TwentyField: React.FC<TwentyFieldProps> = ({
   };
 
   return (
-    <div className="w-full max-w-4xl p-4 sm:p-6 md:p-8 bg-white/45 backdrop-blur-md rounded-3xl border border-white/60 shadow-xl select-none my-8 shrink-0">
+    <div className="w-full max-w-4xl p-5 sm:p-6 md:p-8 clay-card select-none my-6 shrink-0">
       <div className="flex flex-col md:flex-row gap-4 md:gap-6 lg:gap-8 justify-center items-center">
         {/* First Ten-Frame (indices 0-9) */}
         <div className="grid grid-cols-5 gap-2 md:gap-2.5 lg:gap-3 shrink-0">

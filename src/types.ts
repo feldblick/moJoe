@@ -14,16 +14,16 @@ export interface Task {
 export type CellState = 'empty' | 'color1' | 'color2' | 'color3';
 
 export const FRAME1_COLORS: Record<string, { hex: string; class: string }> = {
-  Rot: { hex: '#ff4d4d', class: 'bg-gradient-to-br from-red-400 to-red-600 shadow-[0_4px_10px_rgba(239,68,68,0.4)] border border-red-500/20' },
-  Orange: { hex: '#f97316', class: 'bg-gradient-to-br from-orange-400 to-orange-600 shadow-[0_4px_10px_rgba(249,115,22,0.4)] border border-orange-500/20' },
-  Gelb: { hex: '#facc15', class: 'bg-gradient-to-br from-yellow-300 to-yellow-500 shadow-[0_4px_10px_rgba(234,179,8,0.4)] border border-yellow-500/20' },
-  Rosa: { hex: '#ec4899', class: 'bg-gradient-to-br from-pink-400 to-pink-600 shadow-[0_4px_10px_rgba(236,72,153,0.4)] border border-pink-500/20' },
+  Rot: { hex: '#ff5c5c', class: 'bg-gradient-to-br from-[#ff8585] to-[#ef4444] shadow-[0_4px_8px_rgba(239,68,68,0.25),inset_0_2px_4px_rgba(255,255,255,0.4)] border border-red-400/20' },
+  Orange: { hex: '#f97316', class: 'bg-gradient-to-br from-[#ff9a52] to-[#ea580c] shadow-[0_4px_8px_rgba(234,88,12,0.25),inset_0_2px_4px_rgba(255,255,255,0.4)] border border-orange-400/20' },
+  Gelb: { hex: '#facc15', class: 'bg-gradient-to-br from-[#fde047] to-[#eab308] shadow-[0_4px_8px_rgba(234,179,8,0.25),inset_0_2px_4px_rgba(255,255,255,0.4)] border border-yellow-400/20' },
+  Rosa: { hex: '#ff70b0', class: 'bg-gradient-to-br from-[#ff9cc7] to-[#ec4899] shadow-[0_4px_8px_rgba(236,72,153,0.25),inset_0_2px_4px_rgba(255,255,255,0.4)] border border-pink-400/20' },
 };
 
 export const FRAME2_COLORS: Record<string, { hex: string; class: string }> = {
-  Blau: { hex: '#1e92ff', class: 'bg-gradient-to-br from-blue-400 to-blue-600 shadow-[0_4px_10px_rgba(30,146,255,0.4)] border border-blue-500/20' },
-  Lila: { hex: '#a855f7', class: 'bg-gradient-to-br from-purple-400 to-purple-600 shadow-[0_4px_10px_rgba(168,85,247,0.4)] border border-purple-500/20' },
-  Grün: { hex: '#22c55e', class: 'bg-gradient-to-br from-green-400 to-green-600 shadow-[0_4px_10px_rgba(34,197,94,0.4)] border border-green-500/20' },
-  Türkis: { hex: '#06b6d4', class: 'bg-gradient-to-br from-cyan-400 to-cyan-600 shadow-[0_4px_10px_rgba(6,182,212,0.4)] border border-cyan-500/20' },
+  Blau: { hex: '#3b82f6', class: 'bg-gradient-to-br from-[#60a5fa] to-[#2563eb] shadow-[0_4px_8px_rgba(37,99,235,0.25),inset_0_2px_4px_rgba(255,255,255,0.4)] border border-blue-400/20' },
+  Lila: { hex: '#a855f7', class: 'bg-gradient-to-br from-[#c084fc] to-[#9333ea] shadow-[0_4px_8px_rgba(147,51,234,0.25),inset_0_2px_4px_rgba(255,255,255,0.4)] border border-purple-400/20' },
+  Grün: { hex: '#22c55e', class: 'bg-gradient-to-br from-[#4ade80] to-[#16a34a] shadow-[0_4px_8px_rgba(22,163,74,0.25),inset_0_2px_4px_rgba(255,255,255,0.4)] border border-green-400/20' },
+  Türkis: { hex: '#06b6d4', class: 'bg-gradient-to-br from-[#22d3ee] to-[#0891b2] shadow-[0_4px_8px_rgba(8,145,178,0.25),inset_0_2px_4px_rgba(255,255,255,0.4)] border border-cyan-400/20' },
 };
 

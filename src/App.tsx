@@ -4,7 +4,7 @@ import { Confetti } from './components/Confetti';
 import { FRAME1_COLORS, FRAME2_COLORS } from './types';
 import type { Task, CellState, DifficultyLevel, TaskType } from './types';
 import { soundManager } from './utils/SoundManager';
-import { Star, RefreshCw, Volume2, VolumeX, CheckCircle, ArrowRight, HelpCircle, Sparkles } from 'lucide-react';
+import { Star, RefreshCw, Volume2, VolumeX, CheckCircle, ArrowRight, Sparkles, Settings, Eraser, Frown, Trophy } from 'lucide-react';
 
 const TASKS_PER_ROUND = 5;
 
@@ -84,18 +84,26 @@ const getInitialCellStates = (task: Task, lvl: DifficultyLevel): CellState[] => 
     // Level 3: Start completely empty
   } else {
     // Subtraction (operand1 - operand2 = result)
+    const C = task.result;
     if (lvl === 1) {
       // Level 1: Fully visual
-      // C cells (result) = empty (solid gray circles)
+      // C cells (result) = color1 (gray filled)
+      for (let i = 0; i < C; i++) {
+        states[i] = 'color1';
+      }
       // Subtracted B cells = colored:
       // - cells in first frame (up to 9) = color2
       // - cells in second frame (10+) = color3
-      const C = task.result;
       for (let i = C; i < task.operand1; i++) {
         states[i] = i >= 10 ? 'color3' : 'color2';
       }
+    } else if (lvl === 2) {
+      // Level 2: Result cells pre-colored (gray), child colors subtracted B cells
+      for (let i = 0; i < C; i++) {
+        states[i] = 'color1';
+      }
     }
-    // Level 2 & 3: Start completely empty (only active cells shown, all empty circles)
+    // Level 3: Start completely empty
   }
 
   return states;
@@ -108,6 +116,7 @@ function App() {
   const [taskType, setTaskType] = useState<TaskType>('addition');
   const [level, setLevel] = useState<DifficultyLevel>(1);
   const [isMuted, setIsMuted] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   // User-selected frame colors
   const [colorFrame1, setColorFrame1] = useState<string>('Rot');
@@ -284,13 +293,13 @@ function App() {
         const C = currentTask.result;
 
         // Check representation:
-        // - Cells from 0 to C-1 must be empty
+        // - Cells from 0 to C-1 must be color1 (gray filled)
         // - Cells from C to 9 (if any) must be color2
         // - Cells from 10 to A-1 (if any) must be color3
         // - Cells from A onwards must be empty
         for (let i = 0; i < 20; i++) {
           if (i < C) {
-            if (cellStates[i] !== 'empty') {
+            if (cellStates[i] !== 'color1') {
               triggerIncorrect();
               return;
             }
@@ -353,145 +362,175 @@ function App() {
       }
     } else {
       // Subtraction (A - B)
+      const C = A - B;
       const secondFieldPoints = A - 10;
       const firstFieldPoints = B - secondFieldPoints;
 
       if (level === 1) {
-        return `Rechne ${A} minus ${B}! Zähle die leeren Kreise mit dem soliden Umriss, um das Ergebnis zu finden.`;
+        return `Rechne ${A} minus ${B}! Zähle die grauen Punkte, um das Ergebnis zu finden.`;
       } else if (level === 2) {
         return `Ziehe ${B} Punkte ab! Klicke die Punkte von hinten her an (${secondFieldPoints} in Feld 2 mit ${colorFrame2}, dann ${firstFieldPoints} in Feld 1 mit ${colorFrame1}).`;
       } else {
-        return `Lege den Abzug selbst! Male zuerst ${secondFieldPoints} Kreise in Feld 2 mit ${colorFrame2} an, und dann ${firstFieldPoints} Kreise in Feld 1 mit ${colorFrame1} an.`;
+        return `Lege die Aufgabe selbst! Male ${C} graue Punkte für das Ergebnis. Male dann den Abzug von ${B} (${firstFieldPoints} in Feld 1 mit ${colorFrame1}, und ${secondFieldPoints} in Feld 2 mit ${colorFrame2}) an.`;
       }
     }
   }, [currentTask, level, colorFrame1, colorFrame2]);
 
   return (
-    <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 md:py-10 flex flex-col justify-between">
+    <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 md:py-10 flex flex-col justify-between select-none">
       {/* Top Banner / Progress & Settings */}
       <header className="w-full flex flex-col gap-4 mb-6">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-3xl md:text-4xl animate-float" role="img" aria-label="Abacus">🧮</span>
+          <div className="flex items-center gap-3">
+            {/* Custom SVG logo with cute abacus beads */}
+            <svg className="w-10 h-10 shrink-0 drop-shadow-sm animate-float" viewBox="0 0 100 100">
+              <rect x="10" y="20" width="80" height="60" rx="15" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="6" />
+              <line x1="33" y1="20" x2="33" y2="80" stroke="#cbd5e1" strokeWidth="5" />
+              <line x1="66" y1="20" x2="66" y2="80" stroke="#cbd5e1" strokeWidth="5" />
+              {/* Beads */}
+              <circle cx="33" cy="38" r="9" fill="#ff70b0" />
+              <circle cx="33" cy="58" r="9" fill="#3b82f6" />
+              <circle cx="66" cy="45" r="9" fill="#22c55e" />
+              <circle cx="66" cy="65" r="9" fill="#facc15" />
+            </svg>
             <div>
-              <h1 className="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent tracking-tight">
+              <h1 className="text-3xl font-extrabold font-heading text-slate-800 tracking-tight leading-none mb-0.5">
                 moJoe
               </h1>
-              <p className="text-xs md:text-sm font-medium text-purple-600/80">Das interaktive Zwanzigerfeld</p>
+              <p className="text-xs font-semibold text-indigo-500/80">Das interaktive Zwanzigerfeld</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsMuted(!isMuted)}
-              className="p-2.5 rounded-xl bg-white/80 border border-purple-100 hover:bg-purple-50 transition-colors shadow-sm text-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-400"
+              className="p-2.5 rounded-2xl bg-white/80 border border-slate-200/60 hover:bg-slate-50 hover:scale-[1.03] transition-all shadow-sm text-slate-600 focus:outline-none focus:ring-4 focus:ring-indigo-100 cursor-pointer"
               aria-label={isMuted ? "Ton einschalten" : "Ton stummschalten"}
             >
               {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
             </button>
             <button
               onClick={startNewRound}
-              className="p-2.5 rounded-xl bg-white/80 border border-purple-100 hover:bg-purple-50 transition-colors shadow-sm text-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-400"
+              className="p-2.5 rounded-2xl bg-white/80 border border-slate-200/60 hover:bg-slate-50 hover:scale-[1.03] transition-all shadow-sm text-slate-600 focus:outline-none focus:ring-4 focus:ring-indigo-100 cursor-pointer"
               aria-label="Runde neu starten"
             >
               <RefreshCw size={20} />
             </button>
-          </div>
-        </div>
-
-        {/* Dynamic Color Selector Panel */}
-        <div className="bg-white/80 p-4 rounded-2xl border border-purple-100 shadow-sm flex flex-col sm:flex-row gap-4 justify-between items-center text-sm mb-2 animate-pop">
-          <div className="flex items-center gap-2">
-            <span className="text-lg" role="img" aria-label="Artist Palette">🎨</span>
-            <span className="font-extrabold text-slate-700">Wähle deine Farben:</span>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 w-full sm:w-auto justify-end">
-            <div className="flex items-center gap-2.5">
-              <span className="font-bold text-slate-500">Feld 1 (Zehnerpaket):</span>
-              <div className="flex gap-1.5">
-                {Object.keys(FRAME1_COLORS).map((name) => (
-                  <button
-                    key={name}
-                    onClick={() => { setColorFrame1(name); playSound('click'); }}
-                    className={`w-6 h-6 rounded-full border-2 transition-all duration-200 ${
-                      colorFrame1 === name ? 'border-indigo-600 scale-110 shadow-md' : 'border-transparent hover:scale-105'
-                    }`}
-                    style={{ backgroundColor: FRAME1_COLORS[name].hex }}
-                    title={name}
-                    aria-label={`Farbe 1: ${name}`}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <span className="font-bold text-slate-500">Feld 2 (Zehnerfeld):</span>
-              <div className="flex gap-1.5">
-                {Object.keys(FRAME2_COLORS).map((name) => (
-                  <button
-                    key={name}
-                    onClick={() => { setColorFrame2(name); playSound('click'); }}
-                    className={`w-6 h-6 rounded-full border-2 transition-all duration-200 ${
-                      colorFrame2 === name ? 'border-purple-600 scale-110 shadow-md' : 'border-transparent hover:scale-105'
-                    }`}
-                    style={{ backgroundColor: FRAME2_COLORS[name].hex }}
-                    title={name}
-                    aria-label={`Farbe 2: ${name}`}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Mode & Level Selectors */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Mode Selector */}
-          <div className="bg-white/80 p-1.5 rounded-2xl border border-purple-100 shadow-sm flex gap-1">
             <button
-              onClick={() => handleTaskTypeChange('addition')}
-              className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all duration-200 ${
-                taskType === 'addition'
-                  ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md'
-                  : 'text-indigo-600 hover:bg-indigo-50'
+              onClick={() => setShowSettings(!showSettings)}
+              className={`p-2.5 rounded-2xl border transition-all shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-100 cursor-pointer ${
+                showSettings 
+                  ? 'bg-indigo-50 border-indigo-200 text-indigo-600 scale-[1.03]' 
+                  : 'bg-white/80 border-slate-200/60 hover:bg-slate-50 hover:scale-[1.03] text-slate-600'
               }`}
+              aria-label="Einstellungen öffnen"
             >
-              Plus (+)
-            </button>
-            <button
-              onClick={() => handleTaskTypeChange('subtraction')}
-              className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all duration-200 ${
-                taskType === 'subtraction'
-                  ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md'
-                  : 'text-purple-600 hover:bg-purple-50'
-              }`}
-            >
-              Minus (-)
+              <Settings size={20} className={showSettings ? 'animate-spin-slow' : ''} />
             </button>
           </div>
-
-          {/* Level Selector */}
-          <div className="bg-white/80 p-1.5 rounded-2xl border border-purple-100 shadow-sm flex gap-1">
-            {( [1, 2, 3] as DifficultyLevel[] ).map((lvl) => (
-              <button
-                key={lvl}
-                onClick={() => handleLevelChange(lvl)}
-                className={`flex-1 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
-                  level === lvl
-                    ? 'bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-md'
-                    : 'text-pink-600 hover:bg-pink-50'
-                }`}
-              >
-                {lvl === 1 && 'Level 1'}
-                {lvl === 2 && 'Level 2'}
-                {lvl === 3 && 'Level 3'}
-              </button>
-            ))}
-          </div>
         </div>
+
+        {/* Unified Settings Drawer */}
+        {showSettings && (
+          <div className="clay-card p-5 mt-1 flex flex-col gap-4 animate-pop">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Mode Selector */}
+              <div className="flex flex-col gap-1.5">
+                <span className="font-bold text-xs text-slate-400 uppercase tracking-wider px-1">Rechenart</span>
+                <div className="bg-white/90 p-1 rounded-2xl border border-slate-200/50 shadow-sm flex gap-1">
+                  <button
+                    onClick={() => handleTaskTypeChange('addition')}
+                    className={`flex-1 py-1.5 rounded-xl text-sm font-bold transition-all duration-200 cursor-pointer ${
+                      taskType === 'addition'
+                        ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md'
+                        : 'text-indigo-600 hover:bg-indigo-50'
+                    }`}
+                  >
+                    Plus (+)
+                  </button>
+                  <button
+                    onClick={() => handleTaskTypeChange('subtraction')}
+                    className={`flex-1 py-1.5 rounded-xl text-sm font-bold transition-all duration-200 cursor-pointer ${
+                      taskType === 'subtraction'
+                        ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md'
+                        : 'text-purple-600 hover:bg-purple-50'
+                    }`}
+                  >
+                    Minus (-)
+                  </button>
+                </div>
+              </div>
+
+              {/* Level Selector */}
+              <div className="flex flex-col gap-1.5">
+                <span className="font-bold text-xs text-slate-400 uppercase tracking-wider px-1">Schwierigkeit</span>
+                <div className="bg-white/90 p-1 rounded-2xl border border-slate-200/50 shadow-sm flex gap-1">
+                  {( [1, 2, 3] as DifficultyLevel[] ).map((lvl) => (
+                    <button
+                      key={lvl}
+                      onClick={() => handleLevelChange(lvl)}
+                      className={`flex-1 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer ${
+                        level === lvl
+                          ? 'bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-md'
+                          : 'text-pink-600 hover:bg-pink-50'
+                      }`}
+                    >
+                      Level {lvl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Separator line */}
+            <div className="h-px bg-slate-200/60 w-full" />
+
+            {/* Colors Selectors */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center text-sm">
+              <span className="font-bold text-slate-500 px-1">Gestalte dein Feld:</span>
+              <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 w-full sm:w-auto justify-end">
+                <div className="flex items-center gap-2.5">
+                  <span className="font-semibold text-slate-400 text-xs uppercase tracking-wider">Feld 1:</span>
+                  <div className="flex gap-1.5">
+                    {Object.keys(FRAME1_COLORS).map((name) => (
+                      <button
+                        key={name}
+                        onClick={() => { setColorFrame1(name); playSound('click'); }}
+                        className={`w-7 h-7 rounded-full border-2 transition-all duration-200 cursor-pointer ${
+                          colorFrame1 === name ? 'border-indigo-600 scale-110 shadow-md' : 'border-transparent hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: FRAME1_COLORS[name].hex }}
+                        title={name}
+                        aria-label={`Farbe 1: ${name}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <span className="font-semibold text-slate-400 text-xs uppercase tracking-wider">Feld 2:</span>
+                  <div className="flex gap-1.5">
+                    {Object.keys(FRAME2_COLORS).map((name) => (
+                      <button
+                        key={name}
+                        onClick={() => { setColorFrame2(name); playSound('click'); }}
+                        className={`w-7 h-7 rounded-full border-2 transition-all duration-200 cursor-pointer ${
+                          colorFrame2 === name ? 'border-purple-600 scale-110 shadow-md' : 'border-transparent hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: FRAME2_COLORS[name].hex }}
+                        title={name}
+                        aria-label={`Farbe 2: ${name}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Progress Tracker (Stars) */}
-        <div className="bg-white/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/60 shadow-sm flex items-center justify-between">
-          <span className="text-sm font-bold text-slate-600">Aufgabe {taskIndex + 1} von {TASKS_PER_ROUND}</span>
+        <div className="bg-white/50 border border-slate-200/50 px-5 py-3 rounded-2xl shadow-sm flex items-center justify-between">
+          <span className="text-sm font-bold text-slate-500 font-heading">Aufgabe {taskIndex + 1} von {TASKS_PER_ROUND}</span>
           <div className="flex gap-1.5">
             {Array.from({ length: TASKS_PER_ROUND }).map((_, idx) => {
               const isActive = idx === taskIndex;
@@ -499,7 +538,7 @@ function App() {
               return (
                 <Star
                   key={idx}
-                  size={24}
+                  size={22}
                   className={`transition-all duration-300 ${
                     isDone 
                       ? 'fill-amber-400 text-amber-400 scale-100' 
@@ -518,23 +557,25 @@ function App() {
       <main className="flex-1 flex flex-col justify-center items-center py-4">
         {roundFinished ? (
           /* Finished Screen */
-          <div className="bg-white/80 backdrop-blur-lg p-8 rounded-3xl border border-white shadow-2xl max-w-md w-full text-center animate-pop">
-            <span className="text-6xl block mb-4" role="img" aria-label="Party Popper">🎉</span>
-            <h2 className="text-3xl font-extrabold text-slate-800 mb-2">Großartig gemacht!</h2>
-            <p className="text-slate-600 mb-2 font-medium">
+          <div className="clay-card p-8 max-w-md w-full text-center animate-pop flex flex-col items-center">
+            <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mb-4 border-2 border-amber-200 shadow-sm animate-float">
+              <Trophy size={42} className="text-amber-500 fill-amber-300" />
+            </div>
+            <h2 className="text-3xl font-bold font-heading text-slate-800 mb-2">Großartig gemacht!</h2>
+            <p className="text-slate-500 mb-2 font-semibold">
               Du hast alle {TASKS_PER_ROUND} Aufgaben im {level === 1 ? 'Level 1' : level === 2 ? 'Level 2' : 'Level 3'} gelöst!
             </p>
-            <p className="text-indigo-600 font-extrabold text-2xl mb-6">
+            <p className="text-indigo-600 font-extrabold font-heading text-2xl mb-6">
               Sterne gesammelt: {score} / {TASKS_PER_ROUND} ⭐
             </p>
             <div className="flex justify-center gap-1.5 mb-8">
-              {Array.from({ length: TASKS_PER_ROUND }).map((_, idx) => (
-                <Star key={idx} size={36} className="fill-amber-400 text-amber-400 animate-float" style={{ animationDelay: `${idx * 0.15}s` }} />
+              {Array.from({ length: score }).map((_, idx) => (
+                <Star key={idx} size={32} className="fill-amber-400 text-amber-400 animate-float" style={{ animationDelay: `${idx * 0.15}s` }} />
               ))}
             </div>
             <button
               onClick={startNewRound}
-              className="w-full py-4 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:to-pink-600 text-white font-extrabold text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-purple-300"
+              className="w-full py-4 bg-gradient-to-b from-pink-400 to-rose-600 border-rose-700 text-white text-xl clay-btn"
             >
               Nochmal spielen!
             </button>
@@ -542,51 +583,70 @@ function App() {
         ) : currentTask ? (
           /* Game Area */
           <div className="w-full flex flex-col items-center">
-            {/* Speech bubble / explanation */}
-            <div className="relative bg-white border border-indigo-100 p-4 rounded-2xl shadow-md max-w-2xl text-center mb-6 animate-float">
-              <div className="absolute -bottom-2.5 left-1/2 transform -translate-x-1/2 w-5 h-5 bg-white border-r border-b border-indigo-100 rotate-45" />
-              <p className="text-sm sm:text-base font-bold text-slate-700 flex items-center justify-center gap-2">
-                <HelpCircle size={18} className="text-indigo-500 shrink-0" />
-                {instructionMessage}
-              </p>
+            {/* Mascot and Speech Bubble / Explanation */}
+            <div className="flex flex-col sm:flex-row items-center gap-4 max-w-2xl w-full mb-4 px-2">
+              {/* Cute Owl Mascot SVG */}
+              <svg className="w-16 h-16 md:w-20 md:h-20 animate-mascot shrink-0 select-none drop-shadow-sm" viewBox="0 0 100 100">
+                <circle cx="50" cy="55" r="32" fill="#818cf8" />
+                <ellipse cx="50" cy="62" rx="20" ry="16" fill="#e0e7ff" />
+                <polygon points="25,32 38,36 22,18" fill="#818cf8" />
+                <polygon points="75,32 62,36 78,18" fill="#818cf8" />
+                <circle cx="38" cy="42" r="12" fill="white" />
+                <circle cx="62" cy="42" r="12" fill="white" />
+                <circle cx="40" cy="42" r="6" fill="#1e1b4b" />
+                <circle cx="60" cy="42" r="6" fill="#1e1b4b" />
+                <circle cx="38" cy="40" r="2" fill="white" />
+                <circle cx="58" cy="40" r="2" fill="white" />
+                <polygon points="50,48 45,56 55,56" fill="#fbbf24" />
+                <circle cx="40" cy="86" r="5" fill="#f59e0b" />
+                <circle cx="60" cy="86" r="5" fill="#f59e0b" />
+              </svg>
+
+              {/* Speech bubble */}
+              <div className="relative flex-1 bg-white border-2 border-indigo-100/60 p-4 rounded-3xl shadow-sm text-center sm:text-left animate-pop min-h-[64px] flex items-center">
+                <div className="bubble-tail" />
+                <p className="text-sm sm:text-base font-bold text-slate-600 leading-snug">
+                  {instructionMessage}
+                </p>
+              </div>
             </div>
 
             {/* Level 3 Palette Toolbar */}
             {level === 3 && !isCorrect && (
-              <div className="flex flex-wrap gap-2 p-2 bg-white/90 backdrop-blur-md rounded-2xl border border-slate-100 shadow-lg mb-4 justify-center">
+              <div className="flex flex-wrap gap-2 p-2 bg-white/95 rounded-2xl border border-slate-200/60 shadow-md mb-4 justify-center">
                 {currentTask.type === 'addition' ? (
                   <>
                     <button
                       onClick={() => { setActiveTool('color1'); playSound('click'); }}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all border ${
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all border cursor-pointer ${
                         activeTool === 'color1'
-                          ? 'bg-slate-100 border-slate-300 text-slate-700 scale-[1.03] shadow-sm'
-                          : 'border-transparent text-slate-600 hover:bg-slate-50'
+                          ? 'bg-slate-100 border-slate-300 text-slate-700 scale-[1.02] shadow-sm'
+                          : 'border-transparent text-slate-500 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="w-3.5 h-3.5 rounded-full bg-slate-400" />
+                      <div className="w-3.5 h-3.5 rounded-full bg-slate-400 shadow-sm" />
                       Zahl 1 (Grau)
                     </button>
                     <button
                       onClick={() => { setActiveTool('color2'); playSound('click'); }}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all border ${
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all border cursor-pointer ${
                         activeTool === 'color2'
-                          ? 'bg-red-50 border-red-200 text-red-600 scale-[1.03] shadow-sm'
-                          : 'border-transparent text-slate-600 hover:bg-slate-50'
+                          ? 'bg-red-50 border-red-200 text-red-600 scale-[1.02] shadow-sm'
+                          : 'border-transparent text-slate-500 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: FRAME1_COLORS[colorFrame1]?.hex }} />
+                      <div className="w-3.5 h-3.5 rounded-full shadow-sm" style={{ backgroundColor: FRAME1_COLORS[colorFrame1]?.hex }} />
                       Zahl 2 ({colorFrame1})
                     </button>
                     <button
                       onClick={() => { setActiveTool('color3'); playSound('click'); }}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all border ${
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all border cursor-pointer ${
                         activeTool === 'color3'
-                          ? 'bg-blue-50 border-blue-200 text-blue-600 scale-[1.03] shadow-sm'
-                          : 'border-transparent text-slate-600 hover:bg-slate-50'
+                          ? 'bg-blue-50 border-blue-200 text-blue-600 scale-[1.02] shadow-sm'
+                          : 'border-transparent text-slate-500 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: FRAME2_COLORS[colorFrame2]?.hex }} />
+                      <div className="w-3.5 h-3.5 rounded-full shadow-sm" style={{ backgroundColor: FRAME2_COLORS[colorFrame2]?.hex }} />
                       Zahl 2 ({colorFrame2})
                     </button>
                   </>
@@ -594,37 +654,37 @@ function App() {
                   <>
                     <button
                       onClick={() => { setActiveTool('color3'); playSound('click'); }}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all border ${
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all border cursor-pointer ${
                         activeTool === 'color3'
-                          ? 'bg-blue-50 border-blue-200 text-blue-600 scale-[1.03] shadow-sm'
-                          : 'border-transparent text-slate-600 hover:bg-slate-50'
+                          ? 'bg-blue-50 border-blue-200 text-blue-600 scale-[1.02] shadow-sm'
+                          : 'border-transparent text-slate-500 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: FRAME2_COLORS[colorFrame2]?.hex }} />
+                      <div className="w-3.5 h-3.5 rounded-full shadow-sm" style={{ backgroundColor: FRAME2_COLORS[colorFrame2]?.hex }} />
                       Abzug ({colorFrame2})
                     </button>
                     <button
                       onClick={() => { setActiveTool('color2'); playSound('click'); }}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all border ${
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all border cursor-pointer ${
                         activeTool === 'color2'
-                          ? 'bg-red-50 border-red-200 text-red-600 scale-[1.03] shadow-sm'
-                          : 'border-transparent text-slate-600 hover:bg-slate-50'
+                          ? 'bg-red-50 border-red-200 text-red-600 scale-[1.02] shadow-sm'
+                          : 'border-transparent text-slate-500 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: FRAME1_COLORS[colorFrame1]?.hex }} />
+                      <div className="w-3.5 h-3.5 rounded-full shadow-sm" style={{ backgroundColor: FRAME1_COLORS[colorFrame1]?.hex }} />
                       Abzug ({colorFrame1})
                     </button>
                   </>
                 )}
                 <button
                   onClick={() => { setActiveTool('eraser'); playSound('click'); }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all border ${
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all border cursor-pointer ${
                     activeTool === 'eraser'
-                      ? 'bg-slate-100 border-slate-300 text-slate-700 scale-[1.03] shadow-sm'
-                      : 'border-transparent text-slate-500 hover:bg-slate-50'
+                      ? 'bg-slate-100 border-slate-300 text-slate-700 scale-[1.02] shadow-sm'
+                      : 'border-transparent text-slate-400 hover:bg-slate-50'
                   }`}
                 >
-                  <span role="img" aria-label="Eraser" className="text-sm">🧽</span>
+                  <Eraser size={16} className="text-slate-500" />
                   Löschen
                 </button>
               </div>
@@ -641,8 +701,8 @@ function App() {
             />
 
             {/* Mathematical Equation & Answer Form */}
-            <div className="flex flex-col sm:flex-row items-center gap-4 mt-4 w-full justify-center">
-              <div className="flex items-center gap-3 font-extrabold text-4xl sm:text-5xl text-slate-800 tracking-wide select-none">
+            <div className="flex flex-col sm:flex-row items-center gap-4 mt-2 w-full justify-center">
+              <div className="flex items-center gap-3 font-heading font-extrabold text-5xl sm:text-6xl text-slate-700 tracking-wide select-none">
                 <span>{currentTask.operand1}</span>
                 <span className="text-indigo-500">{currentTask.type === 'addition' ? '+' : '-'}</span>
                 <span>{currentTask.operand2}</span>
@@ -669,14 +729,14 @@ function App() {
                     }
                   }}
                   placeholder="?"
-                  className={`w-20 h-16 sm:w-24 sm:h-20 text-center rounded-2xl border-3 font-extrabold text-4xl bg-white shadow-inner focus:outline-none transition-all duration-200 select-text ${
+                  className={`w-20 h-16 sm:w-24 sm:h-20 text-center rounded-3xl font-heading font-extrabold text-4xl bg-white clay-input transition-all duration-200 select-text ${
                     showShake ? 'animate-shake' : ''
                   } ${
                     isCorrect === true
-                      ? 'border-green-500 text-green-600 bg-green-50/50'
+                      ? 'border-green-500 text-green-600 bg-green-50/50 !shadow-none'
                       : isCorrect === false
                         ? 'border-red-400 text-red-500 focus:border-red-500'
-                        : 'border-indigo-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100'
+                        : ''
                   }`}
                   autoComplete="off"
                 />
@@ -687,7 +747,7 @@ function App() {
                 {isCorrect ? (
                   <button
                     onClick={nextTask}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-4 sm:py-5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-extrabold text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 animate-pulse-subtle"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-4 sm:py-5 bg-gradient-to-b from-[#10b981] to-[#059669] border-[#065f46] text-white text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 transform active:scale-95 clay-btn"
                   >
                     <span>Weiter</span>
                     <ArrowRight size={22} />
@@ -695,7 +755,7 @@ function App() {
                 ) : (
                   <button
                     onClick={handleCheck}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-4 sm:py-5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-extrabold text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-4 sm:py-5 bg-gradient-to-b from-indigo-500 to-[#4f46e5] border-[#3730a3] text-white text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 transform active:scale-95 clay-btn"
                   >
                     <span>Prüfen</span>
                     <CheckCircle size={22} />
@@ -706,13 +766,15 @@ function App() {
 
             {/* Validation Feedback message */}
             {isCorrect === false && (
-              <div className="mt-4 text-red-500 font-bold text-sm bg-red-50 px-4 py-2 rounded-xl border border-red-100 animate-pop">
-                Leider nicht ganz richtig! Überprüfe die Punkte oder dein Ergebnis. 🧐
+              <div className="mt-4 text-red-600 font-bold text-sm bg-red-50 border-2 border-red-200 px-5 py-3 rounded-2xl flex items-center gap-2 shadow-sm animate-pop font-heading animate-shake">
+                <Frown size={20} className="text-red-500 shrink-0" />
+                <span>Leider nicht ganz richtig! Überprüfe die Punkte oder dein Ergebnis.</span>
               </div>
             )}
             {isCorrect === true && (
-              <div className="mt-4 text-green-600 font-bold text-sm bg-green-50 px-4 py-2 rounded-xl border border-green-100 flex items-center gap-1.5 animate-pop">
-                <Sparkles size={16} /> Super! Das ist vollkommen richtig! 🌟
+              <div className="mt-4 text-emerald-700 font-bold text-sm bg-emerald-50 border-2 border-emerald-200 px-5 py-3 rounded-2xl flex items-center gap-2 shadow-sm animate-pop font-heading">
+                <Sparkles size={20} className="text-emerald-500 animate-pulse shrink-0" />
+                <span>Super! Das ist vollkommen richtig! 🌟</span>
               </div>
             )}
           </div>
@@ -720,7 +782,7 @@ function App() {
       </main>
 
       {/* Footer / Copyright / SEO */}
-      <footer className="w-full text-center py-4 border-t border-purple-100/40 mt-8 text-xs text-purple-600/60 font-medium">
+      <footer className="w-full text-center py-4 border-t border-indigo-100/40 mt-8 text-xs text-indigo-500/60 font-semibold">
         moJoe © 2026 • Ein spielerisches Zwanzigerfeld für den optimalen Zehnerübergang
       </footer>
 
