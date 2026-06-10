@@ -1,11 +1,107 @@
-import { useState, useEffect, useMemo } from 'react';
-import { TwentyField, FRAME1_COLORS, FRAME2_COLORS } from './components/TwentyField';
+import { useState, useMemo } from 'react';
+import { TwentyField } from './components/TwentyField';
 import { Confetti } from './components/Confetti';
+import { FRAME1_COLORS, FRAME2_COLORS } from './types';
 import type { Task, CellState, DifficultyLevel, TaskType } from './types';
 import { soundManager } from './utils/SoundManager';
 import { Star, RefreshCw, Volume2, VolumeX, CheckCircle, ArrowRight, HelpCircle, Sparkles } from 'lucide-react';
 
 const TASKS_PER_ROUND = 5;
+
+// Generate a random task based on type
+const generateTask = (type: TaskType, id: number): Task => {
+  let operand1: number;
+  let operand2: number;
+  let result: number;
+
+  if (type === 'addition') {
+    // Must cross 10: operand1 + operand2 > 10
+    // Sum must be <= 20
+    // Larger operand must always be operand1
+    while (true) {
+      const op1 = Math.floor(Math.random() * 9) + 1; // 1 to 9
+      const op2 = Math.floor(Math.random() * 9) + 1; // 1 to 9
+      const sum = op1 + op2;
+      if (sum > 10 && sum <= 20) {
+        operand1 = Math.max(op1, op2);
+        operand2 = Math.min(op1, op2);
+        result = operand1 + operand2;
+        break;
+      }
+    }
+  } else {
+    // Subtraction: minuend - subtrahend = result
+    // Minuend between 11 and 20 (crossing 10 downwards)
+    // Subtrahend between 1 and 9
+    // Result must be < 10 (so we cross the 10 boundary downwards)
+    while (true) {
+      operand1 = Math.floor(Math.random() * 10) + 11; // 11 to 20
+      operand2 = Math.floor(Math.random() * 9) + 1; // 1 to 9
+      result = operand1 - operand2;
+      if (result < 10 && result > 0) {
+        break;
+      }
+    }
+  }
+
+  return {
+    id,
+    type,
+    operand1,
+    operand2,
+    result,
+    maxCapacity: 20
+  };
+};
+
+// Helper to initialize cell states based on task, type, level, and selected colors
+const getInitialCellStates = (task: Task, lvl: DifficultyLevel): CellState[] => {
+  const states = Array(20).fill('empty') as CellState[];
+
+  if (task.type === 'addition') {
+    const A = task.operand1;
+    const B = task.operand2;
+
+    if (lvl === 1) {
+      // Level 1: Fully visual. 
+      // A cells (first operand) = color1 (gray)
+      for (let i = 0; i < A; i++) {
+        states[i] = 'color1';
+      }
+      // B cells (second operand) split at index 10:
+      // - cells up to index 9 = color2 (color of frame 1 package)
+      // - cells index 10 onwards = color3 (color of frame 2)
+      for (let i = 0; i < B; i++) {
+        const idx = A + i;
+        states[idx] = idx >= 10 ? 'color3' : 'color2';
+      }
+    } else if (lvl === 2) {
+      // Level 2: Operand 1 pre-colored (gray), child colors operand 2
+      for (let i = 0; i < A; i++) {
+        states[i] = 'color1';
+      }
+    }
+    // Level 3: Start completely empty
+  } else {
+    // Subtraction (operand1 - operand2 = result)
+    if (lvl === 1) {
+      // Level 1: Fully visual
+      // C cells (result) = empty (solid gray circles)
+      // Subtracted B cells = colored:
+      // - cells in first frame (up to 9) = color2
+      // - cells in second frame (10+) = color3
+      const C = task.result;
+      for (let i = C; i < task.operand1; i++) {
+        states[i] = i >= 10 ? 'color3' : 'color2';
+      }
+    }
+    // Level 2 & 3: Start completely empty (only active cells shown, all empty circles)
+  }
+
+  return states;
+};
+
+const firstTask = generateTask('addition', 1);
 
 function App() {
   // Game Settings
@@ -18,8 +114,8 @@ function App() {
   const [colorFrame2, setColorFrame2] = useState<string>('Blau');
 
   // Task & Representation State
-  const [currentTask, setCurrentTask] = useState<Task | null>(null);
-  const [cellStates, setCellStates] = useState<CellState[]>(Array(20).fill('empty'));
+  const [currentTask, setCurrentTask] = useState<Task | null>(firstTask);
+  const [cellStates, setCellStates] = useState<CellState[]>(() => getInitialCellStates(firstTask, 1));
   const [inputValue, setInputValue] = useState('');
   
   // Level 3 Toolbar Selection
@@ -35,109 +131,6 @@ function App() {
   const [taskIndex, setTaskIndex] = useState(0); // 0 to TASKS_PER_ROUND - 1
   const [roundFinished, setRoundFinished] = useState(false);
 
-  // Generate a random task based on type
-  const generateTask = (type: TaskType, id: number): Task => {
-    let operand1 = 0;
-    let operand2 = 0;
-    let result = 0;
-
-    if (type === 'addition') {
-      // Must cross 10: operand1 + operand2 > 10
-      // Sum must be <= 20
-      // Larger operand must always be operand1
-      while (true) {
-        const op1 = Math.floor(Math.random() * 9) + 1; // 1 to 9
-        const op2 = Math.floor(Math.random() * 9) + 1; // 1 to 9
-        const sum = op1 + op2;
-        if (sum > 10 && sum <= 20) {
-          operand1 = Math.max(op1, op2);
-          operand2 = Math.min(op1, op2);
-          result = operand1 + operand2;
-          break;
-        }
-      }
-    } else {
-      // Subtraction: minuend - subtrahend = result
-      // Minuend between 11 and 20 (crossing 10 downwards)
-      // Subtrahend between 1 and 9
-      // Result must be < 10 (so we cross the 10 boundary downwards)
-      while (true) {
-        operand1 = Math.floor(Math.random() * 10) + 11; // 11 to 20
-        operand2 = Math.floor(Math.random() * 9) + 1; // 1 to 9
-        result = operand1 - operand2;
-        if (result < 10 && result > 0) {
-          break;
-        }
-      }
-    }
-
-    return {
-      id,
-      type,
-      operand1,
-      operand2,
-      result,
-      maxCapacity: 20
-    };
-  };
-
-  // Helper to initialize cell states based on task, type, level, and selected colors
-  const getInitialCellStates = (task: Task, lvl: DifficultyLevel): CellState[] => {
-    const states = Array(20).fill('empty') as CellState[];
-
-    if (task.type === 'addition') {
-      const A = task.operand1;
-      const B = task.operand2;
-
-      if (lvl === 1) {
-        // Level 1: Fully visual. 
-        // A cells (first operand) = color1 (gray)
-        for (let i = 0; i < A; i++) {
-          states[i] = 'color1';
-        }
-        // B cells (second operand) split at index 10:
-        // - cells up to index 9 = color2 (color of frame 1 package)
-        // - cells index 10 onwards = color3 (color of frame 2)
-        for (let i = 0; i < B; i++) {
-          const idx = A + i;
-          states[idx] = idx >= 10 ? 'color3' : 'color2';
-        }
-      } else if (lvl === 2) {
-        // Level 2: Operand 1 pre-colored (gray), child colors operand 2
-        for (let i = 0; i < A; i++) {
-          states[i] = 'color1';
-        }
-      }
-      // Level 3: Start completely empty
-    } else {
-      // Subtraction (operand1 - operand2 = result)
-      if (lvl === 1) {
-        // Level 1: Fully visual
-        // C cells (result) = empty (solid gray circles)
-        // Subtracted B cells = colored:
-        // - cells in first frame (up to 9) = color2
-        // - cells in second frame (10+) = color3
-        const C = task.result;
-        for (let i = C; i < task.operand1; i++) {
-          states[i] = i >= 10 ? 'color3' : 'color2';
-        }
-      }
-      // Level 2 & 3: Start completely empty (only active cells shown, all empty circles)
-    }
-
-    return states;
-  };
-
-  // Set up first task or update on settings change
-  useEffect(() => {
-    startNewRound();
-  }, [taskType, level]);
-
-  // Handle active tool reset on mode change
-  useEffect(() => {
-    setActiveTool(taskType === 'addition' ? 'color1' : 'color3');
-  }, [taskType]);
-
   const startNewRound = () => {
     const newTask = generateTask(taskType, 1);
     setCurrentTask(newTask);
@@ -150,6 +143,36 @@ function App() {
     setShowConfetti(false);
     setActiveTool(taskType === 'addition' ? 'color1' : 'color3');
   };
+
+  const handleLevelChange = (lvl: DifficultyLevel) => {
+    setLevel(lvl);
+    const newTask = generateTask(taskType, 1);
+    setCurrentTask(newTask);
+    setCellStates(getInitialCellStates(newTask, lvl));
+    setInputValue('');
+    setIsCorrect(null);
+    setScore(0);
+    setTaskIndex(0);
+    setRoundFinished(false);
+    setShowConfetti(false);
+    setActiveTool(taskType === 'addition' ? 'color1' : 'color3');
+  };
+
+  const handleTaskTypeChange = (type: TaskType) => {
+    setTaskType(type);
+    const newTask = generateTask(type, 1);
+    setCurrentTask(newTask);
+    setCellStates(getInitialCellStates(newTask, level));
+    setInputValue('');
+    setIsCorrect(null);
+    setScore(0);
+    setTaskIndex(0);
+    setRoundFinished(false);
+    setShowConfetti(false);
+    setActiveTool(type === 'addition' ? 'color1' : 'color3');
+  };
+
+
 
   const nextTask = () => {
     setShowConfetti(false);
@@ -352,7 +375,7 @@ function App() {
             <span className="text-3xl md:text-4xl animate-float" role="img" aria-label="Abacus">🧮</span>
             <div>
               <h1 className="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent tracking-tight">
-                EasyMath
+                moJoe
               </h1>
               <p className="text-xs md:text-sm font-medium text-purple-600/80">Das interaktive Zwanzigerfeld</p>
             </div>
@@ -425,7 +448,7 @@ function App() {
           {/* Mode Selector */}
           <div className="bg-white/80 p-1.5 rounded-2xl border border-purple-100 shadow-sm flex gap-1">
             <button
-              onClick={() => setTaskType('addition')}
+              onClick={() => handleTaskTypeChange('addition')}
               className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all duration-200 ${
                 taskType === 'addition'
                   ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md'
@@ -435,7 +458,7 @@ function App() {
               Plus (+)
             </button>
             <button
-              onClick={() => setTaskType('subtraction')}
+              onClick={() => handleTaskTypeChange('subtraction')}
               className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all duration-200 ${
                 taskType === 'subtraction'
                   ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md'
@@ -451,7 +474,7 @@ function App() {
             {( [1, 2, 3] as DifficultyLevel[] ).map((lvl) => (
               <button
                 key={lvl}
-                onClick={() => setLevel(lvl)}
+                onClick={() => handleLevelChange(lvl)}
                 className={`flex-1 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
                   level === lvl
                     ? 'bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-md'
@@ -698,7 +721,7 @@ function App() {
 
       {/* Footer / Copyright / SEO */}
       <footer className="w-full text-center py-4 border-t border-purple-100/40 mt-8 text-xs text-purple-600/60 font-medium">
-        EasyMath © 2026 • Ein spielerisches Zwanzigerfeld für den optimalen Zehnerübergang
+        moJoe © 2026 • Ein spielerisches Zwanzigerfeld für den optimalen Zehnerübergang
       </footer>
 
       {/* Confetti Animation Layer */}
