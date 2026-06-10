@@ -28,6 +28,10 @@ export const TwentyField: React.FC<TwentyFieldProps> = ({
     if (task.type === 'addition') {
       return true;
     } else {
+      // In level 2 and 3 subtraction, show all 20 cells
+      if (level > 1) {
+        return true;
+      }
       return index < task.operand1;
     }
   };
@@ -43,7 +47,7 @@ export const TwentyField: React.FC<TwentyFieldProps> = ({
         return index >= task.operand1;
       } else {
         // In Level 2 Subtraction, only cells representing the subtracted amount are interactive (from C to A-1)
-        return index >= task.result;
+        return index >= task.result && index < task.operand1;
       }
     }
 
@@ -100,15 +104,8 @@ export const TwentyField: React.FC<TwentyFieldProps> = ({
               }`} />
             )}
             {state === 'empty' && (
-              <>
-                {task.type === 'subtraction' ? (
-                  // Subtraction: Solid, decent gray circle for the minuend placeholders
-                  <div className="w-8 h-8 md:w-9 md:h-9 lg:w-11 lg:h-11 xl:w-12 xl:h-12 rounded-full border-2 border-solid border-slate-200 bg-[#f1f5f9]/60 shadow-[inset_0_2px_3px_rgba(148,163,184,0.08)]" />
-                ) : (
-                  // Addition: Dashed outline for empty spaces
-                  <div className="w-8 h-8 md:w-9 md:h-9 lg:w-11 lg:h-11 xl:w-12 xl:h-12 rounded-full border-2 border-dashed border-slate-300/50 bg-slate-50/20 flex items-center justify-center transition-all duration-200 hover:border-slate-400/50" />
-                )}
-              </>
+              // Empty cell representation (leere Umrisspunkte)
+              <div className="w-8 h-8 md:w-9 md:h-9 lg:w-11 lg:h-11 xl:w-12 xl:h-12 rounded-full border-2 border-dashed border-slate-300/50 bg-slate-50/20 flex items-center justify-center transition-all duration-200 hover:border-slate-400/50" />
             )}
           </>
         )}

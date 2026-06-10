@@ -98,8 +98,8 @@ const getInitialCellStates = (task: Task, lvl: DifficultyLevel): CellState[] => 
         states[i] = i >= 10 ? 'color3' : 'color2';
       }
     } else if (lvl === 2) {
-      // Level 2: Result cells pre-colored (gray), child colors subtracted B cells
-      for (let i = 0; i < C; i++) {
+      // Level 2: Minuend cells pre-colored (gray), child colors/subtracts B cells by making them colored
+      for (let i = 0; i < task.operand1; i++) {
         states[i] = 'color1';
       }
     }
@@ -135,6 +135,9 @@ function App() {
   const [showShake, setShowShake] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
 
+  // Hint State
+  const [showHint, setShowHint] = useState(false);
+
   // Round Progress State
   const [score, setScore] = useState(0);
   const [taskIndex, setTaskIndex] = useState(0); // 0 to TASKS_PER_ROUND - 1
@@ -150,7 +153,8 @@ function App() {
     setTaskIndex(0);
     setRoundFinished(false);
     setShowConfetti(false);
-    setActiveTool(taskType === 'addition' ? 'color1' : 'color3');
+    setShowHint(false);
+    setActiveTool('color1');
   };
 
   const handleLevelChange = (lvl: DifficultyLevel) => {
@@ -164,7 +168,8 @@ function App() {
     setTaskIndex(0);
     setRoundFinished(false);
     setShowConfetti(false);
-    setActiveTool(taskType === 'addition' ? 'color1' : 'color3');
+    setShowHint(false);
+    setActiveTool('color1');
   };
 
   const handleTaskTypeChange = (type: TaskType) => {
@@ -178,15 +183,15 @@ function App() {
     setTaskIndex(0);
     setRoundFinished(false);
     setShowConfetti(false);
-    setActiveTool(type === 'addition' ? 'color1' : 'color3');
+    setShowHint(false);
+    setActiveTool('color1');
   };
-
-
 
   const nextTask = () => {
     setShowConfetti(false);
     setIsCorrect(null);
     setInputValue('');
+    setShowHint(false);
     
     if (taskIndex < TASKS_PER_ROUND - 1) {
       const nextIdx = taskIndex + 1;
@@ -201,11 +206,22 @@ function App() {
     }
   };
 
-  const playSound = (sound: 'correct' | 'incorrect' | 'click') => {
+  const playSound = (sound: 'correct' | 'incorrect' | 'click' | 'chirp') => {
     if (isMuted) return;
     if (sound === 'correct') soundManager.playCorrect();
     else if (sound === 'incorrect') soundManager.playIncorrect();
     else if (sound === 'click') soundManager.playClick();
+    else if (sound === 'chirp') soundManager.playChirp();
+  };
+
+  const handleMascotClick = () => {
+    const nextShowHint = !showHint;
+    setShowHint(nextShowHint);
+    if (nextShowHint) {
+      playSound('chirp');
+    } else {
+      playSound('click');
+    }
   };
 
   const handleCellClick = (index: number) => {
@@ -224,21 +240,34 @@ function App() {
           }
         }
       } else {
-        // Subtraction: can click any active cell (indices 0 to operand1 - 1)
-        if (index < currentTask.operand1) {
-          if (newCellStates[index] === 'empty') {
-            newCellStates[index] = index >= 10 ? 'color3' : 'color2';
-          } else {
-            newCellStates[index] = 'empty';
-          }
+        // Subtraction Level 2: toggle between color1 (gray) and colored (color2/color3)
+        // Only indices from result to operand1 - 1 are interactive (enforced by TwentyField's isCellInteractive)
+        const targetColor = index >= 10 ? 'color3' : 'color2';
+        if (newCellStates[index] === 'color1') {
+          newCellStates[index] = targetColor;
+        } else {
+          newCellStates[index] = 'color1';
         }
       }
     } else if (level === 3) {
-      // Free drawing: set cell state to active tool
+      // Free drawing: set cell state to active tool with child-friendly toggle
       if (activeTool === 'eraser') {
         newCellStates[index] = 'empty';
-      } else {
-        newCellStates[index] = activeTool;
+      } else if (activeTool === 'color1') {
+        newCellStates[index] = newCellStates[index] === 'color1' ? 'empty' : 'color1';
+      } else if (activeTool === 'color2') {
+        const targetColor = index >= 10 ? 'color3' : 'color2';
+        if (currentTask.type === 'subtraction') {
+          // In subtraction, Abzug tool can only paint over gray (color1) cells, and toggles them back to gray
+          if (newCellStates[index] === 'color1') {
+            newCellStates[index] = targetColor;
+          } else if (newCellStates[index] === targetColor) {
+            newCellStates[index] = 'color1';
+          }
+        } else {
+          // In addition, standard toggle between empty and colored
+          newCellStates[index] = newCellStates[index] === targetColor ? 'empty' : targetColor;
+        }
       }
     }
 
@@ -584,9 +613,15 @@ function App() {
           /* Game Area */
           <div className="w-full flex flex-col items-center">
             {/* Mascot and Speech Bubble / Explanation */}
-            <div className="flex flex-col sm:flex-row items-center gap-4 max-w-2xl w-full mb-4 px-2">
+            <div className="flex flex-col sm:flex-row items-center gap-4 max-w-2xl w-full mb-4 px-2 justify-center">
               {/* Cute Owl Mascot SVG */}
-              <svg className="w-16 h-16 md:w-20 md:h-20 animate-mascot shrink-0 select-none drop-shadow-sm" viewBox="0 0 100 100">
+              <svg
+                onClick={handleMascotClick}
+                className="w-16 h-16 md:w-20 md:h-20 animate-mascot shrink-0 select-none drop-shadow-sm cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200"
+                viewBox="0 0 100 100"
+                role="button"
+                aria-label="Hilfe-Eule antippen"
+              >
                 <circle cx="50" cy="55" r="32" fill="#818cf8" />
                 <ellipse cx="50" cy="62" rx="20" ry="16" fill="#e0e7ff" />
                 <polygon points="25,32 38,36 22,18" fill="#818cf8" />
@@ -603,12 +638,14 @@ function App() {
               </svg>
 
               {/* Speech bubble */}
-              <div className="relative flex-1 bg-white border-2 border-indigo-100/60 p-4 rounded-3xl shadow-sm text-center sm:text-left animate-pop min-h-[64px] flex items-center">
-                <div className="bubble-tail" />
-                <p className="text-sm sm:text-base font-bold text-slate-600 leading-snug">
-                  {instructionMessage}
-                </p>
-              </div>
+              {showHint && (
+                <div className="relative flex-1 bg-white border-2 border-indigo-100/60 p-4 rounded-3xl shadow-sm text-center sm:text-left animate-pop min-h-[64px] flex items-center">
+                  <div className="bubble-tail" />
+                  <p className="text-sm sm:text-base font-bold text-slate-600 leading-snug">
+                    {instructionMessage}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Level 3 Palette Toolbar */}
@@ -635,33 +672,25 @@ function App() {
                           : 'border-transparent text-slate-500 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="w-3.5 h-3.5 rounded-full shadow-sm" style={{ backgroundColor: FRAME1_COLORS[colorFrame1]?.hex }} />
-                      Zahl 2 ({colorFrame1})
-                    </button>
-                    <button
-                      onClick={() => { setActiveTool('color3'); playSound('click'); }}
-                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all border cursor-pointer ${
-                        activeTool === 'color3'
-                          ? 'bg-blue-50 border-blue-200 text-blue-600 scale-[1.02] shadow-sm'
-                          : 'border-transparent text-slate-500 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="w-3.5 h-3.5 rounded-full shadow-sm" style={{ backgroundColor: FRAME2_COLORS[colorFrame2]?.hex }} />
-                      Zahl 2 ({colorFrame2})
+                      <div className="flex items-center gap-0.5 mr-1 shrink-0">
+                        <div className="w-2.5 h-3.5 rounded-l-full shadow-sm" style={{ backgroundColor: FRAME1_COLORS[colorFrame1]?.hex || '#ef4444' }} />
+                        <div className="w-2.5 h-3.5 rounded-r-full shadow-sm" style={{ backgroundColor: FRAME2_COLORS[colorFrame2]?.hex || '#3b82f6' }} />
+                      </div>
+                      Zahl 2 (Bunt)
                     </button>
                   </>
                 ) : (
                   <>
                     <button
-                      onClick={() => { setActiveTool('color3'); playSound('click'); }}
+                      onClick={() => { setActiveTool('color1'); playSound('click'); }}
                       className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all border cursor-pointer ${
-                        activeTool === 'color3'
-                          ? 'bg-blue-50 border-blue-200 text-blue-600 scale-[1.02] shadow-sm'
+                        activeTool === 'color1'
+                          ? 'bg-slate-100 border-slate-300 text-slate-700 scale-[1.02] shadow-sm'
                           : 'border-transparent text-slate-500 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="w-3.5 h-3.5 rounded-full shadow-sm" style={{ backgroundColor: FRAME2_COLORS[colorFrame2]?.hex }} />
-                      Abzug ({colorFrame2})
+                      <div className="w-3.5 h-3.5 rounded-full bg-slate-400 shadow-sm" />
+                      Zahl 1 (Grau)
                     </button>
                     <button
                       onClick={() => { setActiveTool('color2'); playSound('click'); }}
@@ -671,8 +700,11 @@ function App() {
                           : 'border-transparent text-slate-500 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="w-3.5 h-3.5 rounded-full shadow-sm" style={{ backgroundColor: FRAME1_COLORS[colorFrame1]?.hex }} />
-                      Abzug ({colorFrame1})
+                      <div className="flex items-center gap-0.5 mr-1 shrink-0">
+                        <div className="w-2.5 h-3.5 rounded-l-full shadow-sm" style={{ backgroundColor: FRAME1_COLORS[colorFrame1]?.hex || '#ef4444' }} />
+                        <div className="w-2.5 h-3.5 rounded-r-full shadow-sm" style={{ backgroundColor: FRAME2_COLORS[colorFrame2]?.hex || '#3b82f6' }} />
+                      </div>
+                      Abzug (Bunt)
                     </button>
                   </>
                 )}
@@ -701,68 +733,98 @@ function App() {
             />
 
             {/* Mathematical Equation & Answer Form */}
-            <div className="flex flex-col sm:flex-row items-center gap-4 mt-2 w-full justify-center">
-              <div className="flex items-center gap-3 font-heading font-extrabold text-5xl sm:text-6xl text-slate-700 tracking-wide select-none">
-                <span>{currentTask.operand1}</span>
-                <span className="text-indigo-500">{currentTask.type === 'addition' ? '+' : '-'}</span>
-                <span>{currentTask.operand2}</span>
-                <span className="text-slate-400">=</span>
-                
-                {/* Result Input Field */}
-                <input
-                  id="result-input"
-                  type="text"
-                  pattern="[0-9]*"
-                  inputMode="numeric"
-                  value={inputValue}
-                  disabled={isCorrect === true}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/[^0-9]/g, '');
-                    if (val.length <= 2) {
-                      setInputValue(val);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      if (isCorrect) nextTask();
-                      else handleCheck();
-                    }
-                  }}
-                  placeholder="?"
-                  className={`w-20 h-16 sm:w-24 sm:h-20 text-center rounded-3xl font-heading font-extrabold text-4xl bg-white clay-input transition-all duration-200 select-text ${
-                    showShake ? 'animate-shake' : ''
-                  } ${
-                    isCorrect === true
-                      ? 'border-green-500 text-green-600 bg-green-50/50 !shadow-none'
-                      : isCorrect === false
-                        ? 'border-red-400 text-red-500 focus:border-red-500'
-                        : ''
-                  }`}
-                  autoComplete="off"
-                />
-              </div>
+            {(() => {
+              const A = currentTask.operand1;
+              const B = currentTask.operand2;
+              let pct: number;
+              let colorA: string;
+              let colorB: string;
+              
+              if (currentTask.type === 'addition') {
+                const toTen = 10 - A;
+                pct = (toTen / B) * 100;
+                colorA = FRAME1_COLORS[colorFrame1]?.hex || '#ff5c5c';
+                colorB = FRAME2_COLORS[colorFrame2]?.hex || '#3b82f6';
+              } else {
+                const secondFieldPoints = A - 10;
+                pct = (secondFieldPoints / B) * 100;
+                colorA = FRAME2_COLORS[colorFrame2]?.hex || '#3b82f6';
+                colorB = FRAME1_COLORS[colorFrame1]?.hex || '#ff5c5c';
+              }
 
-              {/* Action Buttons */}
-              <div className="flex gap-2 w-full sm:w-auto">
-                {isCorrect ? (
-                  <button
-                    onClick={nextTask}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-4 sm:py-5 bg-gradient-to-b from-[#10b981] to-[#059669] border-[#065f46] text-white text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 transform active:scale-95 clay-btn"
-                  >
-                    <span>Weiter</span>
-                    <ArrowRight size={22} />
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleCheck}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-4 sm:py-5 bg-gradient-to-b from-indigo-500 to-[#4f46e5] border-[#3730a3] text-white text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 transform active:scale-95 clay-btn"
-                  >
-                    <span>Prüfen</span>
-                    <CheckCircle size={22} />
-                  </button>
-                )}
-              </div>
-            </div>
+              const operand2Style: React.CSSProperties = {
+                backgroundImage: `linear-gradient(to right, ${colorA} ${pct}%, ${colorB} ${pct}%)`,
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                color: 'transparent',
+                display: 'inline-block',
+              };
+
+              return (
+                <div className="flex flex-col sm:flex-row items-center gap-4 mt-2 w-full justify-center">
+                  <div className="flex items-center gap-3 font-heading font-extrabold text-5xl sm:text-6xl text-slate-700 tracking-wide select-none">
+                    <span style={{ color: '#64748b' }}>{A}</span>
+                    <span className="text-slate-500">{currentTask.type === 'addition' ? '+' : '-'}</span>
+                    <span style={operand2Style}>{B}</span>
+                    <span className="text-slate-500">=</span>
+                    
+                    {/* Result Input Field */}
+                    <input
+                      id="result-input"
+                      type="text"
+                      pattern="[0-9]*"
+                      inputMode="numeric"
+                      value={inputValue}
+                      disabled={isCorrect === true}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        if (val.length <= 2) {
+                          setInputValue(val);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          if (isCorrect) nextTask();
+                          else handleCheck();
+                        }
+                      }}
+                      placeholder="?"
+                      className={`w-20 h-16 sm:w-24 sm:h-20 text-center rounded-3xl font-heading font-extrabold text-4xl bg-white clay-input transition-all duration-200 select-text ${
+                        showShake ? 'animate-shake' : ''
+                      } ${
+                        isCorrect === true
+                          ? 'border-green-500 text-green-600 bg-green-50/50 !shadow-none'
+                          : isCorrect === false
+                            ? 'border-red-400 text-red-500 focus:border-red-500'
+                            : ''
+                      }`}
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    {isCorrect ? (
+                      <button
+                        onClick={nextTask}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-4 sm:py-5 bg-gradient-to-b from-[#10b981] to-[#059669] border-[#065f46] text-white text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 transform active:scale-95 clay-btn"
+                      >
+                        <span>Weiter</span>
+                        <ArrowRight size={22} />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleCheck}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-4 sm:py-5 bg-gradient-to-b from-indigo-500 to-[#4f46e5] border-[#3730a3] text-white text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 transform active:scale-95 clay-btn"
+                      >
+                        <span>Prüfen</span>
+                        <CheckCircle size={22} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Validation Feedback message */}
             {isCorrect === false && (
