@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { TwentyField } from './components/TwentyField';
 import { Confetti } from './components/Confetti';
 import { FRAME1_COLORS, FRAME2_COLORS } from './types';
@@ -373,6 +373,55 @@ function App() {
     setTimeout(() => setShowShake(false), 400);
   };
 
+  // Listen to physical keyboard events globally for desktop users
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (roundFinished) {
+        if (e.key === 'Enter') {
+          playSound('click');
+          startNewRound();
+        }
+        return;
+      }
+
+      if (!currentTask) return;
+
+      if (e.key === 'Enter') {
+        if (isCorrect === true) {
+          playSound('click');
+          nextTask();
+        } else {
+          handleCheck();
+        }
+        return;
+      }
+
+      // If already correct, block typing
+      if (isCorrect === true) return;
+
+      if (/^[0-9]$/.test(e.key)) {
+        playSound('click');
+        setInputValue((prev) => {
+          if (prev.length < 2) {
+            return prev + e.key;
+          }
+          return prev;
+        });
+      } else if (e.key === 'Backspace') {
+        playSound('click');
+        setInputValue((prev) => prev.slice(0, -1));
+      } else if (e.key === 'Escape') {
+        playSound('click');
+        setInputValue('');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [currentTask, isCorrect, roundFinished, inputValue, isMuted, nextTask, handleCheck, startNewRound]);
+
   // Speech bubbles instructional text
   const instructionMessage = useMemo(() => {
     if (!currentTask) return '';
@@ -408,7 +457,7 @@ function App() {
   return (
     <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 md:py-10 flex flex-col justify-between select-none">
       {/* Top Banner / Progress & Settings */}
-      <header className="w-full flex flex-col gap-4 mb-6">
+      <header className="relative w-full flex flex-col gap-3 mb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* Custom SVG logo with cute abacus beads */}
@@ -431,6 +480,36 @@ function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Cute Owl Mascot Button */}
+            <button
+              onClick={handleMascotClick}
+              className={`p-1 rounded-2xl border transition-all shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-100 cursor-pointer flex items-center justify-center w-11 h-11 ${
+                showHint 
+                  ? 'bg-indigo-50 border-indigo-200 ring-2 ring-indigo-400/20 scale-[1.03]' 
+                  : 'bg-white/80 border-slate-200/60 hover:bg-slate-50 hover:scale-[1.03]'
+              }`}
+              aria-label="Hilfe-Eule antippen"
+            >
+              <svg
+                className="w-8 h-8 animate-mascot shrink-0 select-none drop-shadow-sm"
+                viewBox="0 0 100 100"
+              >
+                <circle cx="50" cy="55" r="32" fill="#818cf8" />
+                <ellipse cx="50" cy="62" rx="20" ry="16" fill="#e0e7ff" />
+                <polygon points="25,32 38,36 22,18" fill="#818cf8" />
+                <polygon points="75,32 62,36 78,18" fill="#818cf8" />
+                <circle cx="38" cy="42" r="12" fill="white" />
+                <circle cx="62" cy="42" r="12" fill="white" />
+                <circle cx="40" cy="42" r="6" fill="#1e1b4b" />
+                <circle cx="60" cy="42" r="6" fill="#1e1b4b" />
+                <circle cx="38" cy="40" r="2" fill="white" />
+                <circle cx="58" cy="40" r="2" fill="white" />
+                <polygon points="50,48 45,56 55,56" fill="#fbbf24" />
+                <circle cx="40" cy="86" r="5" fill="#f59e0b" />
+                <circle cx="60" cy="86" r="5" fill="#f59e0b" />
+              </svg>
+            </button>
+
             <button
               onClick={() => setIsMuted(!isMuted)}
               className="p-2.5 rounded-2xl bg-white/80 border border-slate-200/60 hover:bg-slate-50 hover:scale-[1.03] transition-all shadow-sm text-slate-600 focus:outline-none focus:ring-4 focus:ring-indigo-100 cursor-pointer"
@@ -580,10 +659,33 @@ function App() {
             })}
           </div>
         </div>
+
+        {/* Floating Speech bubble / Help Hint Overlay */}
+        {showHint && !roundFinished && currentTask && (
+          <div className="absolute right-0 top-14 z-50 w-[calc(100vw-32px)] sm:w-80 bg-white/90 backdrop-blur-md border border-indigo-100/50 p-4 rounded-3xl shadow-xl animate-pop">
+            {/* Tail pointing up to the mascot button */}
+            <div className="absolute -top-2 right-[170px] w-4 h-4 bg-white/90 border-t border-l border-indigo-100/60 transform rotate-45" />
+            
+            {/* Close Button */}
+            <button
+              onClick={() => { setShowHint(false); playSound('click'); }}
+              className="absolute top-2.5 right-2.5 p-1 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
+              aria-label="Hinweis schließen"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            <p className="text-sm font-bold text-slate-600 leading-snug pr-5">
+              {instructionMessage}
+            </p>
+          </div>
+        )}
       </header>
 
       {/* Main Board Content */}
-      <main className="flex-1 flex flex-col justify-center items-center py-4">
+      <main className="flex-1 flex flex-col justify-center items-center py-1.5">
         {roundFinished ? (
           /* Finished Screen */
           <div className="clay-card p-8 max-w-md w-full text-center animate-pop flex flex-col items-center">
@@ -612,41 +714,6 @@ function App() {
         ) : currentTask ? (
           /* Game Area */
           <div className="w-full flex flex-col items-center">
-            {/* Mascot and Speech Bubble / Explanation */}
-            <div className="flex flex-col sm:flex-row items-center gap-4 max-w-2xl w-full mb-4 px-2 justify-center">
-              {/* Cute Owl Mascot SVG */}
-              <svg
-                onClick={handleMascotClick}
-                className="w-16 h-16 md:w-20 md:h-20 animate-mascot shrink-0 select-none drop-shadow-sm cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200"
-                viewBox="0 0 100 100"
-                role="button"
-                aria-label="Hilfe-Eule antippen"
-              >
-                <circle cx="50" cy="55" r="32" fill="#818cf8" />
-                <ellipse cx="50" cy="62" rx="20" ry="16" fill="#e0e7ff" />
-                <polygon points="25,32 38,36 22,18" fill="#818cf8" />
-                <polygon points="75,32 62,36 78,18" fill="#818cf8" />
-                <circle cx="38" cy="42" r="12" fill="white" />
-                <circle cx="62" cy="42" r="12" fill="white" />
-                <circle cx="40" cy="42" r="6" fill="#1e1b4b" />
-                <circle cx="60" cy="42" r="6" fill="#1e1b4b" />
-                <circle cx="38" cy="40" r="2" fill="white" />
-                <circle cx="58" cy="40" r="2" fill="white" />
-                <polygon points="50,48 45,56 55,56" fill="#fbbf24" />
-                <circle cx="40" cy="86" r="5" fill="#f59e0b" />
-                <circle cx="60" cy="86" r="5" fill="#f59e0b" />
-              </svg>
-
-              {/* Speech bubble */}
-              {showHint && (
-                <div className="relative flex-1 bg-white border-2 border-indigo-100/60 p-4 rounded-3xl shadow-sm text-center sm:text-left animate-pop min-h-[64px] flex items-center">
-                  <div className="bubble-tail" />
-                  <p className="text-sm sm:text-base font-bold text-slate-600 leading-snug">
-                    {instructionMessage}
-                  </p>
-                </div>
-              )}
-            </div>
 
             {/* Level 3 Palette Toolbar */}
             {level === 3 && !isCorrect && (
@@ -768,38 +835,25 @@ function App() {
                     <span style={operand2Style}>{B}</span>
                     <span className="text-slate-500">=</span>
                     
-                    {/* Result Input Field */}
-                    <input
-                      id="result-input"
-                      type="text"
-                      pattern="[0-9]*"
-                      inputMode="numeric"
-                      value={inputValue}
-                      disabled={isCorrect === true}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9]/g, '');
-                        if (val.length <= 2) {
-                          setInputValue(val);
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          if (isCorrect) nextTask();
-                          else handleCheck();
-                        }
-                      }}
-                      placeholder="?"
-                      className={`w-20 h-16 sm:w-24 sm:h-20 text-center rounded-3xl font-heading font-extrabold text-4xl bg-white clay-input transition-all duration-200 select-text ${
+                    {/* Result Display Bubble (Read-only to prevent mobile keyboard) */}
+                    <div
+                      id="result-display"
+                      role="textbox"
+                      aria-label="Ergebnis"
+                      aria-readonly="true"
+                      aria-placeholder="?"
+                      className={`w-20 h-16 sm:w-24 sm:h-20 flex items-center justify-center rounded-3xl font-heading font-extrabold text-4xl bg-white clay-input transition-all duration-200 select-none ${
                         showShake ? 'animate-shake' : ''
                       } ${
                         isCorrect === true
                           ? 'border-green-500 text-green-600 bg-green-50/50 !shadow-none'
                           : isCorrect === false
-                            ? 'border-red-400 text-red-500 focus:border-red-500'
-                            : ''
+                            ? 'border-red-400 text-red-500'
+                            : 'text-slate-700'
                       }`}
-                      autoComplete="off"
-                    />
+                    >
+                      {inputValue || '?'}
+                    </div>
                   </div>
 
                   {/* Action Buttons */}
@@ -825,6 +879,73 @@ function App() {
                 </div>
               );
             })()}
+
+            {/* Custom On-screen Keypad */}
+            {!isCorrect && (
+              <div className="mt-6 mb-2 w-full max-w-[280px] grid grid-cols-3 gap-3 animate-pop">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => {
+                      playSound('click');
+                      setInputValue((prev) => {
+                        if (prev.length < 2) {
+                          return prev + num;
+                        }
+                        return prev;
+                      });
+                    }}
+                    className="h-14 sm:h-16 text-2xl sm:text-3xl bg-white text-slate-700 font-heading font-extrabold rounded-2xl shadow-sm border border-slate-200/50 hover:bg-indigo-50/10 active:scale-95 cursor-pointer clay-btn flex items-center justify-center transition-all duration-150"
+                  >
+                    {num}
+                  </button>
+                ))}
+                
+                {/* Clear (C) button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    playSound('click');
+                    setInputValue('');
+                  }}
+                  className="h-14 sm:h-16 text-xl sm:text-2xl bg-amber-50 text-amber-600 border border-amber-200/40 hover:bg-amber-100/50 font-heading font-extrabold rounded-2xl active:scale-95 cursor-pointer clay-btn flex items-center justify-center transition-all duration-150"
+                  aria-label="Eingabe löschen"
+                >
+                  C
+                </button>
+
+                {/* Digit 0 */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    playSound('click');
+                    setInputValue((prev) => {
+                      if (prev.length < 2) {
+                        return prev + '0';
+                      }
+                      return prev;
+                    });
+                  }}
+                  className="h-14 sm:h-16 text-2xl sm:text-3xl bg-white text-slate-700 font-heading font-extrabold rounded-2xl shadow-sm border border-slate-200/50 hover:bg-indigo-50/10 active:scale-95 cursor-pointer clay-btn flex items-center justify-center transition-all duration-150"
+                >
+                  0
+                </button>
+
+                {/* Backspace button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    playSound('click');
+                    setInputValue((prev) => prev.slice(0, -1));
+                  }}
+                  className="h-14 sm:h-16 text-lg sm:text-xl bg-rose-50 text-rose-600 border border-rose-200/40 hover:bg-rose-100/50 font-heading font-extrabold rounded-2xl active:scale-95 cursor-pointer clay-btn flex items-center justify-center transition-all duration-150"
+                  aria-label="Letzte Stelle löschen"
+                >
+                  ⌫
+                </button>
+              </div>
+            )}
 
             {/* Validation Feedback message */}
             {isCorrect === false && (

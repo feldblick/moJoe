@@ -114,7 +114,7 @@ export const TwentyField: React.FC<TwentyFieldProps> = ({
   };
 
   return (
-    <div className="w-full max-w-4xl p-5 sm:p-6 md:p-8 clay-card select-none my-6 shrink-0">
+    <div className="w-full max-w-4xl p-5 sm:p-6 md:p-8 clay-card select-none mt-2 mb-4 shrink-0">
       <div className="flex flex-col md:flex-row gap-4 md:gap-6 lg:gap-8 justify-center items-center">
         {/* First Ten-Frame (indices 0-9) */}
         <div className="grid grid-cols-5 gap-2 md:gap-2.5 lg:gap-3 shrink-0">
