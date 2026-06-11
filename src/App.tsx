@@ -1,12 +1,19 @@
 import { useState, useMemo, useEffect } from 'react';
 import { TwentyField } from './components/TwentyField';
 import { Confetti } from './components/Confetti';
-import { FRAME1_COLORS, FRAME2_COLORS } from './types';
 import type { Task, CellState, DifficultyLevel, TaskType } from './types';
 import { soundManager } from './utils/SoundManager';
-import { Star, RefreshCw, Volume2, VolumeX, CheckCircle, ArrowRight, Sparkles, Settings, Eraser, Frown, Trophy } from 'lucide-react';
+import { Star, RefreshCw, Volume2, VolumeX, CheckCircle, ArrowRight, Sparkles, Settings, Eraser, Frown, Trophy, Maximize, Minimize, Clock } from 'lucide-react';
 
-const TASKS_PER_ROUND = 5;
+const TASKS_PER_ROUND = 10;
+
+interface HighscoreEntry {
+  name: string;
+  timeSeconds: number;
+  date: string;
+  level: DifficultyLevel;
+  type: TaskType;
+}
 
 // Generate a random task based on type
 const generateTask = (type: TaskType, id: number): Task => {
@@ -111,16 +118,127 @@ const getInitialCellStates = (task: Task, lvl: DifficultyLevel): CellState[] => 
 
 const firstTask = generateTask('addition', 1);
 
+// Convert HSL values to a HEX string (child-friendly round color wheels use HSL)
+function hslToHex(h: number, s: number, l: number): string {
+  l /= 100;
+  const a = (s * Math.min(l, 1 - l)) / 100;
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
 function App() {
   // Game Settings
   const [taskType, setTaskType] = useState<TaskType>('addition');
   const [level, setLevel] = useState<DifficultyLevel>(1);
   const [isMuted, setIsMuted] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
+
+  // Modal Leaderboard Filters & State
+  const [leaderboardFilterType, setLeaderboardFilterType] = useState<TaskType>('addition');
+  const [leaderboardFilterLevel, setLeaderboardFilterLevel] = useState<DifficultyLevel>(1);
+  const [resetConfirm, setResetConfirm] = useState(false);
 
   // User-selected frame colors
-  const [colorFrame1, setColorFrame1] = useState<string>('Rot');
-  const [colorFrame2, setColorFrame2] = useState<string>('Blau');
+  const [colorFrame1, setColorFrame1] = useState<string>('#ef4444');
+  const [colorFrame2, setColorFrame2] = useState<string>('#3b82f6');
+
+  // Custom Color Wheel Drag handlers
+  const handlePointerDown = (
+    e: React.PointerEvent<HTMLDivElement>,
+    setter: (val: string) => void
+  ) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    updateColorFromPointer(e, setter);
+  };
+
+  const handlePointerMove = (
+    e: React.PointerEvent<HTMLDivElement>,
+    setter: (val: string) => void
+  ) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      updateColorFromPointer(e, setter);
+    }
+  };
+
+  const handlePointerUp = (
+    e: React.PointerEvent<HTMLDivElement>
+  ) => {
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    playSound('click');
+  };
+
+  const updateColorFromPointer = (
+    e: React.PointerEvent<HTMLDivElement>,
+    setter: (val: string) => void
+  ) => {
+    const element = e.currentTarget;
+    const rect = element.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const dx = e.clientX - centerX;
+    const dy = e.clientY - centerY;
+
+    if (dx === 0 && dy === 0) return;
+
+    const angleRad = Math.atan2(dy, dx);
+    let angleDeg = angleRad * (180 / Math.PI);
+    let hue = Math.round(angleDeg + 90);
+    if (hue < 0) hue += 360;
+    hue = hue % 360;
+
+    const hex = hslToHex(hue, 100, 50);
+    setter(hex);
+  };
+
+  // Fullscreen State
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Timer State
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  // Highscore States
+  const [tempPlayerName, setTempPlayerName] = useState('');
+  const [scoreSaved, setScoreSaved] = useState(false);
+  const [localHighscores, setLocalHighscores] = useState<HighscoreEntry[]>(() => {
+    try {
+      const raw = localStorage.getItem('mojoe_highscores');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Highscores memo for modal
+  const modalFilteredScores = useMemo(() => {
+    return localHighscores
+      .filter((h) => h.level === leaderboardFilterLevel && h.type === leaderboardFilterType)
+      .sort((a, b) => a.timeSeconds - b.timeSeconds);
+  }, [localHighscores, leaderboardFilterLevel, leaderboardFilterType]);
+
+  const openLeaderboard = () => {
+    setLeaderboardFilterType(taskType);
+    setLeaderboardFilterLevel(level);
+    setShowLeaderboardModal(true);
+    playSound('click');
+  };
+
+  const handleResetHighscores = () => {
+    if (!resetConfirm) {
+      setResetConfirm(true);
+      playSound('click');
+      setTimeout(() => setResetConfirm(false), 3000);
+    } else {
+      setLocalHighscores([]);
+      localStorage.removeItem('mojoe_highscores');
+      setResetConfirm(false);
+      playSound('correct');
+    }
+  };
 
   // Task & Representation State
   const [currentTask, setCurrentTask] = useState<Task | null>(firstTask);
@@ -155,6 +273,8 @@ function App() {
     setShowConfetti(false);
     setShowHint(false);
     setActiveTool('color1');
+    setElapsedTime(0);
+    setScoreSaved(false);
   };
 
   const handleLevelChange = (lvl: DifficultyLevel) => {
@@ -170,6 +290,8 @@ function App() {
     setShowConfetti(false);
     setShowHint(false);
     setActiveTool('color1');
+    setElapsedTime(0);
+    setScoreSaved(false);
   };
 
   const handleTaskTypeChange = (type: TaskType) => {
@@ -185,6 +307,8 @@ function App() {
     setShowConfetti(false);
     setShowHint(false);
     setActiveTool('color1');
+    setElapsedTime(0);
+    setScoreSaved(false);
   };
 
   const nextTask = () => {
@@ -200,6 +324,9 @@ function App() {
         const newTask = generateTask(taskType, currentTask.id + 1);
         setCurrentTask(newTask);
         setCellStates(getInitialCellStates(newTask, level));
+      }
+      if (level === 3) {
+        setActiveTool('color1');
       }
     } else {
       setRoundFinished(true);
@@ -422,6 +549,72 @@ function App() {
     };
   }, [currentTask, isCorrect, roundFinished, inputValue, isMuted, nextTask, handleCheck, startNewRound]);
 
+  // Fullscreen sync hook
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // Live Timer hook
+  useEffect(() => {
+    if (roundFinished || !currentTask || showSettings) return;
+
+    const timer = setInterval(() => {
+      setElapsedTime((prev) => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [roundFinished, currentTask, showSettings]);
+
+  // Highscores memo
+  const filteredScores = useMemo(() => {
+    return localHighscores
+      .filter((h) => h.level === level && h.type === taskType)
+      .sort((a, b) => a.timeSeconds - b.timeSeconds)
+      .slice(0, 5);
+  }, [localHighscores, level, taskType]);
+
+  // Saved unique player names for quick selection
+  const savedNames = useMemo(() => {
+    return Array.from(new Set(localHighscores.map((h) => h.name))).slice(0, 5);
+  }, [localHighscores]);
+
+  // Save score to localStorage
+  const saveScore = () => {
+    if (!tempPlayerName.trim()) return;
+    playSound('correct');
+    
+    const newEntry: HighscoreEntry = {
+      name: tempPlayerName.trim(),
+      timeSeconds: elapsedTime,
+      date: new Date().toLocaleDateString('de-DE'),
+      level: level,
+      type: taskType,
+    };
+    
+    const updated = [...localHighscores, newEntry];
+    setLocalHighscores(updated);
+    localStorage.setItem('mojoe_highscores', JSON.stringify(updated));
+    setScoreSaved(true);
+  };
+
+  // Fullscreen helper variables and functions
+  const toggleFullscreen = () => {
+    playSound('click');
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((err) => {
+        console.warn(`Fullscreen error: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+  
+  const canFullscreen = typeof document !== 'undefined' && document.fullscreenEnabled;
+
   // Speech bubbles instructional text
   const instructionMessage = useMemo(() => {
     if (!currentTask) return '';
@@ -430,13 +623,13 @@ function App() {
 
     if (currentTask.type === 'addition') {
       if (level === 1) {
-        return `Zähle die Punkte! Erst die grauen (${A}), dann die roten/blauen (${B}). Wie viele sind es zusammen?`;
+        return `Zähle die Punkte! Erst die grauen (${A}), dann die bunten (${B}). Wie viele sind es zusammen?`;
       } else if (level === 2) {
         const toTen = 10 - A;
         const overTen = B - toTen;
-        return `Fülle das Zwanzigerfeld auf! Klicke genau ${B} weitere Punkte an (${toTen} in Feld 1 mit ${colorFrame1}, dann ${overTen} in Feld 2 mit ${colorFrame2}).`;
+        return `Fülle das Zwanzigerfeld auf! Klicke genau ${B} weitere Punkte an (${toTen} in Feld 1 mit Farbe 1, dann ${overTen} in Feld 2 mit Farbe 2).`;
       } else {
-        return `Lege die Aufgabe selbst! Male ${A} graue Punkte (Zahl 1). Wähle dann ${colorFrame1} und male ${10 - A} Punkte in Feld 1. Wähle ${colorFrame2} und male den Rest in Feld 2.`;
+        return `Lege die Aufgabe selbst! Male ${A} graue Punkte (Zahl 1). Wähle dann Farbe 1 und male ${10 - A} Punkte in Feld 1. Wähle Farbe 2 und male den Rest in Feld 2.`;
       }
     } else {
       // Subtraction (A - B)
@@ -447,12 +640,12 @@ function App() {
       if (level === 1) {
         return `Rechne ${A} minus ${B}! Zähle die grauen Punkte, um das Ergebnis zu finden.`;
       } else if (level === 2) {
-        return `Ziehe ${B} Punkte ab! Klicke die Punkte von hinten her an (${secondFieldPoints} in Feld 2 mit ${colorFrame2}, dann ${firstFieldPoints} in Feld 1 mit ${colorFrame1}).`;
+        return `Ziehe ${B} Punkte ab! Klicke die Punkte von hinten her an (${secondFieldPoints} in Feld 2 mit Farbe 2, dann ${firstFieldPoints} in Feld 1 mit Farbe 1).`;
       } else {
-        return `Lege die Aufgabe selbst! Male ${C} graue Punkte für das Ergebnis. Male dann den Abzug von ${B} (${firstFieldPoints} in Feld 1 mit ${colorFrame1}, und ${secondFieldPoints} in Feld 2 mit ${colorFrame2}) an.`;
+        return `Lege die Aufgabe selbst! Male ${C} graue Punkte für das Ergebnis. Male dann den Abzug von ${B} (${firstFieldPoints} in Feld 1 mit Farbe 1, und ${secondFieldPoints} in Feld 2 mit Farbe 2) an.`;
       }
     }
-  }, [currentTask, level, colorFrame1, colorFrame2]);
+  }, [currentTask, level]);
 
   return (
     <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-6 md:py-10 flex flex-col justify-between select-none">
@@ -510,6 +703,16 @@ function App() {
               </svg>
             </button>
 
+            {canFullscreen && (
+              <button
+                onClick={toggleFullscreen}
+                className="p-2.5 rounded-2xl bg-white/80 border border-slate-200/60 hover:bg-slate-50 hover:scale-[1.03] transition-all shadow-sm text-slate-600 focus:outline-none focus:ring-4 focus:ring-indigo-100 cursor-pointer"
+                aria-label={isFullscreen ? "Vollbild beenden" : "Vollbild aktivieren"}
+              >
+                {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+              </button>
+            )}
+
             <button
               onClick={() => setIsMuted(!isMuted)}
               className="p-2.5 rounded-2xl bg-white/80 border border-slate-200/60 hover:bg-slate-50 hover:scale-[1.03] transition-all shadow-sm text-slate-600 focus:outline-none focus:ring-4 focus:ring-indigo-100 cursor-pointer"
@@ -523,6 +726,17 @@ function App() {
               aria-label="Runde neu starten"
             >
               <RefreshCw size={20} />
+            </button>
+            <button
+              onClick={openLeaderboard}
+              className={`p-2.5 rounded-2xl border transition-all shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-100 cursor-pointer ${
+                showLeaderboardModal 
+                  ? 'bg-indigo-50 border-indigo-200 text-indigo-600 scale-[1.03]' 
+                  : 'bg-white/80 border-slate-200/60 hover:bg-slate-50 hover:scale-[1.03] text-slate-600'
+              }`}
+              aria-label="Bestenliste öffnen"
+            >
+              <Trophy size={20} />
             </button>
             <button
               onClick={() => setShowSettings(!showSettings)}
@@ -596,39 +810,36 @@ function App() {
             {/* Colors Selectors */}
             <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center text-sm">
               <span className="font-bold text-slate-500 px-1">Gestalte dein Feld:</span>
-              <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 w-full sm:w-auto justify-end">
-                <div className="flex items-center gap-2.5">
-                  <span className="font-semibold text-slate-400 text-xs uppercase tracking-wider">Feld 1:</span>
-                  <div className="flex gap-1.5">
-                    {Object.keys(FRAME1_COLORS).map((name) => (
-                      <button
-                        key={name}
-                        onClick={() => { setColorFrame1(name); playSound('click'); }}
-                        className={`w-7 h-7 rounded-full border-2 transition-all duration-200 cursor-pointer ${
-                          colorFrame1 === name ? 'border-indigo-600 scale-110 shadow-md' : 'border-transparent hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: FRAME1_COLORS[name].hex }}
-                        title={name}
-                        aria-label={`Farbe 1: ${name}`}
-                      />
-                    ))}
+              <div className="flex gap-8 w-full sm:w-auto justify-center sm:justify-end">
+                <div className="flex flex-col items-center gap-1.5">
+                  <span className="font-semibold text-slate-400 text-[10px] uppercase tracking-wider">Feld 1</span>
+                  <div 
+                    className="relative w-20 h-20 rounded-full border-4 border-white shadow-md cursor-crosshair overflow-hidden hover:scale-105 active:scale-95 transition-all flex items-center justify-center select-none touch-none"
+                    style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }}
+                    onPointerDown={(e) => handlePointerDown(e, setColorFrame1)}
+                    onPointerMove={(e) => handlePointerMove(e, setColorFrame1)}
+                    onPointerUp={handlePointerUp}
+                  >
+                    {/* Inner hole masking / Preview of current color */}
+                    <div className="absolute w-10 h-10 rounded-full bg-white shadow-inner flex items-center justify-center pointer-events-none">
+                      <div className="w-6 h-6 rounded-full shadow-sm border border-slate-200" style={{ backgroundColor: colorFrame1 }} />
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2.5">
-                  <span className="font-semibold text-slate-400 text-xs uppercase tracking-wider">Feld 2:</span>
-                  <div className="flex gap-1.5">
-                    {Object.keys(FRAME2_COLORS).map((name) => (
-                      <button
-                        key={name}
-                        onClick={() => { setColorFrame2(name); playSound('click'); }}
-                        className={`w-7 h-7 rounded-full border-2 transition-all duration-200 cursor-pointer ${
-                          colorFrame2 === name ? 'border-purple-600 scale-110 shadow-md' : 'border-transparent hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: FRAME2_COLORS[name].hex }}
-                        title={name}
-                        aria-label={`Farbe 2: ${name}`}
-                      />
-                    ))}
+                
+                <div className="flex flex-col items-center gap-1.5">
+                  <span className="font-semibold text-slate-400 text-[10px] uppercase tracking-wider">Feld 2</span>
+                  <div 
+                    className="relative w-20 h-20 rounded-full border-4 border-white shadow-md cursor-crosshair overflow-hidden hover:scale-105 active:scale-95 transition-all flex items-center justify-center select-none touch-none"
+                    style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }}
+                    onPointerDown={(e) => handlePointerDown(e, setColorFrame2)}
+                    onPointerMove={(e) => handlePointerMove(e, setColorFrame2)}
+                    onPointerUp={handlePointerUp}
+                  >
+                    {/* Inner hole masking / Preview of current color */}
+                    <div className="absolute w-10 h-10 rounded-full bg-white shadow-inner flex items-center justify-center pointer-events-none">
+                      <div className="w-6 h-6 rounded-full shadow-sm border border-slate-200" style={{ backgroundColor: colorFrame2 }} />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -638,7 +849,17 @@ function App() {
 
         {/* Progress Tracker (Stars) */}
         <div className="bg-white/50 border border-slate-200/50 px-5 py-3 rounded-2xl shadow-sm flex items-center justify-between">
-          <span className="text-sm font-bold text-slate-500 font-heading">Aufgabe {taskIndex + 1} von {TASKS_PER_ROUND}</span>
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-bold text-slate-500 font-heading">Aufgabe {taskIndex + 1} von {TASKS_PER_ROUND}</span>
+            
+            {/* Live Timer badge */}
+            {!roundFinished && currentTask && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 border border-indigo-100/50 rounded-full text-xs font-bold text-indigo-600 animate-pulse-subtle">
+                <Clock size={14} className="shrink-0" />
+                <span>{Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')}</span>
+              </div>
+            )}
+          </div>
           <div className="flex gap-1.5">
             {Array.from({ length: TASKS_PER_ROUND }).map((_, idx) => {
               const isActive = idx === taskIndex;
@@ -688,25 +909,112 @@ function App() {
       <main className="flex-1 flex flex-col justify-center items-center py-1.5">
         {roundFinished ? (
           /* Finished Screen */
-          <div className="clay-card p-8 max-w-md w-full text-center animate-pop flex flex-col items-center">
-            <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mb-4 border-2 border-amber-200 shadow-sm animate-float">
-              <Trophy size={42} className="text-amber-500 fill-amber-300" />
+          <div className="clay-card p-6 md:p-8 max-w-md w-full text-center animate-pop flex flex-col items-center">
+            <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mb-3 border-2 border-amber-200 shadow-sm animate-float">
+              <Trophy size={36} className="text-amber-500 fill-amber-300" />
             </div>
-            <h2 className="text-3xl font-bold font-heading text-slate-800 mb-2">Großartig gemacht!</h2>
-            <p className="text-slate-500 mb-2 font-semibold">
+            <h2 className="text-3xl font-bold font-heading text-slate-800 mb-1">Großartig gemacht!</h2>
+            <p className="text-slate-500 mb-1 font-semibold text-sm">
               Du hast alle {TASKS_PER_ROUND} Aufgaben im {level === 1 ? 'Level 1' : level === 2 ? 'Level 2' : 'Level 3'} gelöst!
             </p>
-            <p className="text-indigo-600 font-extrabold font-heading text-2xl mb-6">
+            <p className="text-indigo-600 font-extrabold font-heading text-xl mb-1">
               Sterne gesammelt: {score} / {TASKS_PER_ROUND} ⭐
             </p>
-            <div className="flex justify-center gap-1.5 mb-8">
-              {Array.from({ length: score }).map((_, idx) => (
-                <Star key={idx} size={32} className="fill-amber-400 text-amber-400 animate-float" style={{ animationDelay: `${idx * 0.15}s` }} />
+            <p className="text-slate-600 font-bold text-sm mb-4">
+              Zeit: {elapsedTime}s ({ (elapsedTime / TASKS_PER_ROUND).toFixed(1) }s / Aufgabe)
+            </p>
+
+            {/* Stars animation */}
+            <div className="flex justify-center gap-1 mb-5">
+              {Array.from({ length: Math.min(score, 5) }).map((_, idx) => (
+                <Star key={idx} size={24} className="fill-amber-400 text-amber-400 animate-float" style={{ animationDelay: `${idx * 0.15}s` }} />
               ))}
             </div>
+
+            {/* Save Highscore Section */}
+            {!scoreSaved ? (
+              <div className="w-full bg-white/80 border border-slate-200/50 p-4 rounded-2xl shadow-sm mb-5 flex flex-col gap-3">
+                <span className="text-sm font-bold text-slate-600 font-heading">Trage dich in die Bestenliste ein:</span>
+                
+                {/* Saved Names Quick Pick */}
+                {savedNames.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 justify-center">
+                    {savedNames.map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => { setTempPlayerName(name); playSound('click'); }}
+                        className={`px-3 py-1 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                          tempPlayerName === name 
+                            ? 'bg-indigo-500 border-indigo-600 text-white shadow-sm' 
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    maxLength={12}
+                    placeholder="Dein Name..."
+                    value={tempPlayerName}
+                    onChange={(e) => setTempPlayerName(e.target.value)}
+                    className="flex-1 px-3 py-2 border-2 border-slate-200 rounded-xl font-heading text-sm focus:outline-none focus:border-indigo-400 bg-white"
+                  />
+                  <button
+                    onClick={saveScore}
+                    disabled={!tempPlayerName.trim()}
+                    className="px-4 py-2 bg-indigo-500 text-white text-sm rounded-xl font-bold hover:bg-indigo-600 active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
+                  >
+                    Speichern
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full bg-emerald-50 border border-emerald-200 p-3 rounded-2xl text-emerald-700 text-sm font-bold mb-5 flex items-center justify-center gap-1.5 animate-pop">
+                <Sparkles size={18} className="text-emerald-500 shrink-0" />
+                Erfolgreich gespeichert! 🌟
+              </div>
+            )}
+
+            {/* Leaderboard Section */}
+            <div className="w-full bg-slate-50/70 border border-slate-200/40 p-4 rounded-2xl text-center mb-5 shrink-0">
+              <h3 className="font-heading font-extrabold text-indigo-500 text-base mb-2">
+                Bestenliste: Lvl {level} • {taskType === 'addition' ? 'Plus' : 'Minus'}
+              </h3>
+              {filteredScores.length === 0 ? (
+                <p className="text-slate-400 text-xs font-semibold">Noch keine Einträge. Spiel eine Runde!</p>
+              ) : (
+                <div className="overflow-hidden">
+                  <table className="w-full text-xs text-left">
+                    <thead>
+                      <tr className="border-b border-slate-200/60 text-slate-400 font-bold uppercase text-[10px]">
+                        <th className="py-1 w-12">Platz</th>
+                        <th className="py-1">Name</th>
+                        <th className="py-1 text-right">Zeit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredScores.map((h, idx) => (
+                        <tr key={idx} className="border-b border-slate-100/30 text-slate-600 font-semibold last:border-0">
+                          <td className="py-1.5 font-bold text-indigo-500">#{idx + 1}</td>
+                          <td className="py-1.5 truncate max-w-[120px]">{h.name}</td>
+                          <td className="py-1.5 text-right font-mono font-bold text-slate-700">{h.timeSeconds}s</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={startNewRound}
-              className="w-full py-4 bg-gradient-to-b from-pink-400 to-rose-600 border-rose-700 text-white text-xl clay-btn"
+              className="w-full py-3.5 bg-gradient-to-b from-pink-400 to-rose-600 border-rose-700 text-white text-lg clay-btn"
             >
               Nochmal spielen!
             </button>
@@ -740,8 +1048,8 @@ function App() {
                       }`}
                     >
                       <div className="flex items-center gap-0.5 mr-1 shrink-0">
-                        <div className="w-2.5 h-3.5 rounded-l-full shadow-sm" style={{ backgroundColor: FRAME1_COLORS[colorFrame1]?.hex || '#ef4444' }} />
-                        <div className="w-2.5 h-3.5 rounded-r-full shadow-sm" style={{ backgroundColor: FRAME2_COLORS[colorFrame2]?.hex || '#3b82f6' }} />
+                        <div className="w-2.5 h-3.5 rounded-l-full shadow-sm" style={{ backgroundColor: colorFrame1 }} />
+                        <div className="w-2.5 h-3.5 rounded-r-full shadow-sm" style={{ backgroundColor: colorFrame2 }} />
                       </div>
                       Zahl 2 (Bunt)
                     </button>
@@ -768,8 +1076,8 @@ function App() {
                       }`}
                     >
                       <div className="flex items-center gap-0.5 mr-1 shrink-0">
-                        <div className="w-2.5 h-3.5 rounded-l-full shadow-sm" style={{ backgroundColor: FRAME1_COLORS[colorFrame1]?.hex || '#ef4444' }} />
-                        <div className="w-2.5 h-3.5 rounded-r-full shadow-sm" style={{ backgroundColor: FRAME2_COLORS[colorFrame2]?.hex || '#3b82f6' }} />
+                        <div className="w-2.5 h-3.5 rounded-l-full shadow-sm" style={{ backgroundColor: colorFrame1 }} />
+                        <div className="w-2.5 h-3.5 rounded-r-full shadow-sm" style={{ backgroundColor: colorFrame2 }} />
                       </div>
                       Abzug (Bunt)
                     </button>
@@ -810,13 +1118,13 @@ function App() {
               if (currentTask.type === 'addition') {
                 const toTen = 10 - A;
                 pct = (toTen / B) * 100;
-                colorA = FRAME1_COLORS[colorFrame1]?.hex || '#ff5c5c';
-                colorB = FRAME2_COLORS[colorFrame2]?.hex || '#3b82f6';
+                colorA = colorFrame1;
+                colorB = colorFrame2;
               } else {
                 const secondFieldPoints = A - 10;
                 pct = (secondFieldPoints / B) * 100;
-                colorA = FRAME2_COLORS[colorFrame2]?.hex || '#3b82f6';
-                colorB = FRAME1_COLORS[colorFrame1]?.hex || '#ff5c5c';
+                colorA = colorFrame2;
+                colorB = colorFrame1;
               }
 
               const operand2Style: React.CSSProperties = {
@@ -968,6 +1276,131 @@ function App() {
       <footer className="w-full text-center py-4 border-t border-indigo-100/40 mt-8 text-xs text-indigo-500/60 font-semibold">
         moJoe © 2026 • Ein spielerisches Zwanzigerfeld für den optimalen Zehnerübergang
       </footer>
+
+      {/* Global Leaderboard Modal */}
+      {showLeaderboardModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in animate-none">
+          <div className="clay-card relative bg-white max-w-md w-full p-6 flex flex-col gap-4 animate-pop max-h-[90vh] overflow-y-auto">
+            {/* Close Button */}
+            <button
+              onClick={() => { setShowLeaderboardModal(false); playSound('click'); }}
+              className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
+              aria-label="Bestenliste schließen"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Title */}
+            <div className="flex items-center gap-2.5 mb-1">
+              <div className="w-10 h-10 bg-amber-50 rounded-full flex items-center justify-center border border-amber-200 shadow-sm">
+                <Trophy size={22} className="text-amber-500 fill-amber-300" />
+              </div>
+              <h2 className="text-2xl font-extrabold font-heading text-slate-800">moJoe Bestenliste</h2>
+            </div>
+
+            {/* Mode & Level filters */}
+            <div className="flex flex-col gap-3">
+              {/* Type Filter */}
+              <div className="flex bg-slate-100/80 p-1 rounded-2xl border border-slate-200/40 shadow-inner flex-row gap-1">
+                <button
+                  onClick={() => { setLeaderboardFilterType('addition'); playSound('click'); }}
+                  className={`flex-1 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer ${
+                    leaderboardFilterType === 'addition'
+                      ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Plus (+)
+                </button>
+                <button
+                  onClick={() => { setLeaderboardFilterType('subtraction'); playSound('click'); }}
+                  className={`flex-1 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer ${
+                    leaderboardFilterType === 'subtraction'
+                      ? 'bg-white text-purple-600 shadow-sm border border-slate-200/50'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Minus (-)
+                </button>
+              </div>
+
+              {/* Level Filter */}
+              <div className="flex bg-slate-100/80 p-1 rounded-2xl border border-slate-200/40 shadow-inner flex-row gap-1">
+                {([1, 2, 3] as DifficultyLevel[]).map((lvl) => (
+                  <button
+                    key={lvl}
+                    onClick={() => { setLeaderboardFilterLevel(lvl); playSound('click'); }}
+                    className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
+                      leaderboardFilterLevel === lvl
+                        ? 'bg-white text-pink-600 shadow-sm border border-slate-200/50'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Level {lvl}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Leaderboard Entries List */}
+            <div className="bg-slate-50/50 border border-slate-200/50 rounded-2xl p-4 min-h-[180px] flex flex-col justify-between">
+              {modalFilteredScores.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-2">
+                  <Frown size={28} className="text-slate-300 animate-pulse-subtle animate-none" />
+                  <p className="text-xs font-semibold">Noch keine Einträge für diese Auswahl.</p>
+                  <p className="text-[10px] text-slate-400/80">Spiele eine Runde im Level {leaderboardFilterLevel}, um dich einzutragen!</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto w-full">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200/80 text-slate-400 font-bold uppercase text-[9px] tracking-wider">
+                        <th className="pb-2 pl-1 w-12">Platz</th>
+                        <th className="pb-2">Name</th>
+                        <th className="pb-2 text-right pr-2">Zeit</th>
+                        <th className="pb-2 text-right pr-1">Datum</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {modalFilteredScores.map((h, idx) => (
+                        <tr key={idx} className="border-b border-slate-100 last:border-0 text-slate-600 font-semibold text-xs hover:bg-slate-100/30 transition-colors">
+                          <td className="py-2.5 pl-1 font-bold text-indigo-500">#{idx + 1}</td>
+                          <td className="py-2.5 truncate max-w-[140px] text-slate-700">{h.name}</td>
+                          <td className="py-2.5 text-right font-mono font-bold text-indigo-600 pr-2">{h.timeSeconds}s</td>
+                          <td className="py-2.5 text-right font-mono text-[10px] text-slate-400 pr-1">{h.date || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions / Reset */}
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+              <button
+                onClick={handleResetHighscores}
+                className={`flex-1 py-3 px-4 rounded-2xl font-bold text-xs sm:text-sm border transition-all duration-200 cursor-pointer ${
+                  resetConfirm
+                    ? 'bg-rose-50 border-rose-300 text-rose-600 animate-pulse animate-none'
+                    : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {resetConfirm ? '⚠️ Wirklich löschen?' : 'Bestenliste leeren'}
+              </button>
+              
+              <button
+                onClick={() => { setShowLeaderboardModal(false); playSound('click'); }}
+                className="flex-1 py-3 px-4 bg-indigo-500 text-white font-extrabold text-xs sm:text-sm rounded-2xl hover:bg-indigo-600 active:scale-95 shadow-md hover:shadow-lg transition-all duration-150 cursor-pointer text-center"
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confetti Animation Layer */}
       <Confetti active={showConfetti} />

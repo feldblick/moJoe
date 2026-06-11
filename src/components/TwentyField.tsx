@@ -1,6 +1,5 @@
 import React from 'react';
 import type { Task, CellState, DifficultyLevel } from '../types';
-import { FRAME1_COLORS, FRAME2_COLORS } from '../types';
 import { soundManager } from '../utils/SoundManager';
 
 
@@ -94,14 +93,22 @@ export const TwentyField: React.FC<TwentyFieldProps> = ({
               <div className={`w-8 h-8 md:w-9 md:h-9 lg:w-11 lg:h-11 xl:w-12 xl:h-12 rounded-full animate-pop ${COLOR1_CLASS}`} />
             )}
             {state === 'color2' && (
-              <div className={`w-8 h-8 md:w-9 md:h-9 lg:w-11 lg:h-11 xl:w-12 xl:h-12 rounded-full animate-pop ${
-                FRAME1_COLORS[colorFrame1]?.class || FRAME1_COLORS.Rot.class
-              }`} />
+              <div
+                className="w-8 h-8 md:w-9 md:h-9 lg:w-11 lg:h-11 xl:w-12 xl:h-12 rounded-full animate-pop border border-slate-300/10"
+                style={{
+                  backgroundColor: colorFrame1,
+                  boxShadow: `0 4px 8px ${colorFrame1}40, inset 0 2.5px 4px rgba(255,255,255,0.45), inset 0 -4px 6px rgba(0,0,0,0.2)`
+                }}
+              />
             )}
             {state === 'color3' && (
-              <div className={`w-8 h-8 md:w-9 md:h-9 lg:w-11 lg:h-11 xl:w-12 xl:h-12 rounded-full animate-pop ${
-                FRAME2_COLORS[colorFrame2]?.class || FRAME2_COLORS.Blau.class
-              }`} />
+              <div
+                className="w-8 h-8 md:w-9 md:h-9 lg:w-11 lg:h-11 xl:w-12 xl:h-12 rounded-full animate-pop border border-slate-300/10"
+                style={{
+                  backgroundColor: colorFrame2,
+                  boxShadow: `0 4px 8px ${colorFrame2}40, inset 0 2.5px 4px rgba(255,255,255,0.45), inset 0 -4px 6px rgba(0,0,0,0.2)`
+                }}
+              />
             )}
             {state === 'empty' && (
               // Empty cell representation (leere Umrisspunkte)
